@@ -1,9 +1,8 @@
 package adventofcode
 
 import scala.io.Source
-import scala.util.Try
-import scala.util.Failure
-import scala.util.Success
+import scala.util.{Try, Failure, Success}
+import adventofcode.Utils._
 
 sealed abstract class Tile(val ch: Char)
 case object Wall extends Tile('#')
@@ -11,10 +10,10 @@ case object Floor extends Tile('.')
 case object Goblin extends Tile('G')
 case object Elf extends Tile('E')
 
-case class InvalidTileException(ch: Int) extends Throwable
+case class InvalidTileException(ch: Int) extends Exception
 
 object Tile {
-  def from(ch: Int): Try[Tile] = ch match {
+  def apply(ch: Int): Try[Tile] = ch match {
     case '#' => Success(Wall)
     case '.' => Success(Floor)
     case 'G' => Success(Goblin)
@@ -24,27 +23,20 @@ object Tile {
 }
 
 case class Grid(rows: Array[Array[Tile]]) {
-  override def toString(): String = {
-    rows.map(row => row.map(_.ch).mkString).mkString("\n")
-  }
+  override def toString(): String =
+    rows.map(_.map(_.ch).mkString).mkString("\n")
 
-  def equals(other: Grid): Boolean =
-    other.rows.length == rows.length &&
-      other.rows
-        .zip(rows)
-        .forall(pair => pair._1.sameElements(pair._2))
-
-  override def equals(other: Any): Boolean = other match {
-    case other: Grid => equals(other)
-    case _           => false
+  override def equals(that: Any): Boolean = that match {
+    case that: Grid if that.rows.length != rows.length => false
+    case that: Grid => that.rows.zip(rows).forall(p => p._1.sameElements(p._2))
+    case _          => false
   }
 }
 
 object Year2018Day15 {
   def parse(src: io.Source): Try[Grid] = {
-    def parseLine(line: String): Try[Array[Tile]] =
-      Utils.tryAll(line.map(Tile.from(_))).map(_.toArray)
-    Utils.tryAll(src.getLines().map(parseLine(_))).map(_.toArray).map(Grid(_))
+    def parseLine(line: String) = tryAll(line.map(Tile(_))).map(_.toArray)
+    tryAll(src.getLines().map(parseLine(_))).map(_.toArray).map(Grid)
   }
 
   def read(path: String): Try[Grid] = {

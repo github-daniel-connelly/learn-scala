@@ -21,7 +21,7 @@ class Year2018Day15Test extends AnyFunSuite {
 
   test("parsing.failure") {
     val src = Source.fromString("foo")
-    val grid = Year2018Day15.parse(src)
+    val grid = parse(src)
     assert(grid.isFailure)
   }
 }
