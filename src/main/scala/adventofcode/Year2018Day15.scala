@@ -54,15 +54,9 @@ object Grid {
 // ============================================================================
 // game representation
 
-sealed trait Entity {
-  def id: Int
-  def pos: Pt
-  def typ: EntityType
-
+case class Entity(val typ: EntityType, val id: Int, val pos: Pt) {
   def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
 }
-case class ElfEntity(id: Int, pos: Pt) extends Entity { val typ = Elf }
-case class GoblinEntity(id: Int, pos: Pt) extends Entity { val typ = Goblin }
 
 case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
   def size: Int = byId.size
@@ -78,6 +72,8 @@ case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
   )
   def toVector: Vector[Entity] = byPos.values.toVector
   def contains(pt: Pt): Boolean = byPos.contains(pt)
+  def move(entity: Entity, to: Pt): EntityMap =
+    remove(entity).add(entity.copy(pos = to))
 }
 
 object EntityMap {
@@ -176,6 +172,9 @@ case class Game(
       .toVector
       .sortBy(p => p.toTuple)
       .headOption
+
+  def apply(entity: Entity, step: Pt): Game =
+    copy(entities = entities.move(entity, step))
 }
 
 object Game {
@@ -186,8 +185,8 @@ object Game {
       case (pt, _)    => (pt, Floor)
     }
     val entities = tiles.zipWithIndex.collect {
-      case ((pt, Elf), id)    => new ElfEntity(id, pt)
-      case ((pt, Goblin), id) => new GoblinEntity(id, pt)
+      case ((pt, Elf), id)    => Entity(Elf, id, pt)
+      case ((pt, Goblin), id) => Entity(Goblin, id, pt)
     }
     new Game(map.toMap, EntityMap(entities), grid.data.size, grid.data(0).size)
   }

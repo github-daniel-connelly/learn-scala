@@ -9,6 +9,18 @@ class Year2018Day15Test extends AnyFunSuite {
   def parseGame(s: String): Game =
     Game.fromGrid(Grid.parse(Source.fromString(s)).get)
 
+  def trimLinesLeft(s: String): String =
+    s.linesIterator.map(_.trim).filterNot(_.isEmpty).mkString("\n")
+
+  def stepAll(game: Game): Game =
+    game.turnOrder.foldLeft(game) { (game, entity) =>
+      game
+        .destination(entity)
+        .flatMap(where => game.step(entity.pos, where._1, where._2))
+        .map(game.apply(entity, _))
+        .getOrElse(game)
+    }
+
   test("grid.parsing") {
     val src = Source.fromString("#.EG\nG.E#\n")
     val grid = Grid.parse(src)
@@ -33,7 +45,7 @@ class Year2018Day15Test extends AnyFunSuite {
     var m = EntityMap(Map(), Map())
     assert(m.size == 0)
 
-    val e = new ElfEntity(123, Pt(7, 3))
+    val e = Entity(Elf, 123, Pt(7, 3))
     m = m.add(e)
     assert(m.size == 1)
     assert(m.get(456).isEmpty)
@@ -158,5 +170,30 @@ class Year2018Day15Test extends AnyFunSuite {
     )
     assert(paths.toSet == expected)
     assert(game.step(elf.pos, dst, dist).get == Pt(1, 3))
+  }
+
+  test("game.movement") {
+    val game = parseGame(trimLinesLeft("""
+      #########
+      #G..G..G#
+      #.......#
+      #.......#
+      #G..E..G#
+      #.......#
+      #.......#
+      #G..G..G#
+      #########"""))
+    val result = (1 to 4).foldLeft(game) { (game, _) => stepAll(game) }
+    val expected = parseGame(trimLinesLeft("""
+      #########
+      #.......#
+      #..GGG..#
+      #..GEG..#
+      #G..G...#
+      #......G#
+      #.......#
+      #.......#
+      #########"""))
+    assert(expected.toGrid == result.toGrid)
   }
 }
