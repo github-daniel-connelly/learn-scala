@@ -3,6 +3,8 @@ package adventofcode
 import scala.io.Source
 import scala.util.{Try, Failure, Success}
 import adventofcode.Utils._
+import scala.collection.immutable.Queue
+import scala.collection.immutable.Queue.EmptyQueue
 
 // ============================================================================
 // basic models
@@ -75,6 +77,7 @@ case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
     byPos.removed(entity.pos)
   )
   def toVector: Vector[Entity] = byPos.values.toVector
+  def contains(pt: Pt): Boolean = byPos.contains(pt)
 }
 
 object EntityMap {
@@ -108,14 +111,35 @@ case class Game(
   def targets(forEntity: Entity): Iterable[Entity] =
     entities.toVector.filter(_.typ != forEntity.typ).sortBy(_.pos.toTuple)
 
+  def openNbrs(pt: Pt): Iterable[Pt] = pt.nbrs
+    .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
+    .filterNot(entities.contains)
+    .filter(p => map.getOrElse(p, Floor) == Floor)
+
   def candidateDestinations(forTargets: Iterable[Entity]): Iterable[Pt] =
     forTargets
-      .flatMap(_.pos.nbrs)
+      .flatMap(e => openNbrs(e.pos))
       .toSet
-      .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
-      .filter(p => map.getOrElse(p, Floor) == Floor)
       .toVector
-      .sortBy(_.toTuple)
+      .sortBy((p: Pt) => p.toTuple)
+
+  def bfs(
+      q: Queue[(Pt, Int)],
+      dests: Set[Pt],
+      v: Set[Pt],
+      dists: Map[Pt, Int]
+  ): Map[Pt, Int] =
+    q match {
+      case (p, d) +: tail => {
+        val nbrs = openNbrs(p).filterNot(v.contains).map(p => (p, d + 1))
+        val nextDists = if (dests.contains(p)) dists.updated(p, d) else dists
+        bfs(tail ++ nbrs, dests, v.incl(p), nextDists)
+      }
+      case _ => dists
+    }
+
+  def dists(from: Entity, to: Set[Pt]): Iterable[(Pt, Int)] =
+    bfs(Queue((from.pos, 0)), to, Set(), Map()).toVector.sortBy(_._1.toTuple)
 }
 
 object Game {

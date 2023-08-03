@@ -101,4 +101,36 @@ class Year2018Day15Test extends AnyFunSuite {
     val expected = Vector(Pt(0, 2), Pt(1, 1))
     assert(dests == expected)
   }
+
+  def get(game: Game, pts: Iterable[Pt]): Iterable[Entity] =
+    pts.map(game.entities.get(_).get)
+
+  test("game.chooseDestination") {
+    val game = parseGame("#######\n#E..G.#\n#...#.#\n#.G.#G#\n#######\n")
+    val elf = game.entities.get(Pt(1, 1)).get
+
+    val targets = game.targets(elf)
+    val expectedTargets = get(game, Seq(Pt(1, 4), Pt(3, 2), Pt(3, 5)))
+    assert(targets == expectedTargets)
+
+    val destinations = game.candidateDestinations(targets)
+    val expectedDestinations = Seq(
+      Pt(1, 3),
+      Pt(1, 5),
+      Pt(2, 2),
+      Pt(2, 5),
+      Pt(3, 1),
+      Pt(3, 3)
+    )
+    assert(destinations == expectedDestinations)
+
+    val dists = game.dists(elf, destinations.toSet)
+    val expectedDists = Seq(
+      (Pt(1, 3), 2),
+      (Pt(2, 2), 2),
+      (Pt(3, 1), 2),
+      (Pt(3, 3), 4)
+    )
+    assert(dists == expectedDists)
+  }
 }
