@@ -91,7 +91,6 @@ case class Game(
     val height: Int,
     val width: Int
 ) {
-  println(this)
   def toGrid: Grid = {
     // later values clobber earlier, so entities overwrite floors
     // invariant: at no point are entities standing on walls
@@ -108,6 +107,18 @@ case class Game(
 
   def targets(forEntity: Entity): Iterable[Entity] =
     entities.toVector.filter(_.typ != forEntity.typ).sortBy(_.pos.toTuple)
+
+  def targetsInRange(entity: Entity): Iterable[Entity] =
+    targets(entity).filter(entity.inRange)
+
+  def destinations(entity: Entity): Iterable[Pt] =
+    targets(entity)
+      .flatMap(_.pos.nbrs)
+      .toSet
+      .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
+      .filter(p => map.getOrElse(p, Floor) == Floor)
+      .toVector
+      .sortBy(_.toTuple)
 }
 
 object Game {

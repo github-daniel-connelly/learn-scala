@@ -61,14 +61,14 @@ class Year2018Day15Test extends AnyFunSuite {
     assert(game.map.get(Pt(1, 2)).get == Floor)
   }
 
-  test("gameloop.turnOrder") {
+  test("game.turnOrder") {
     val game = parseGame("#.EG\nG.E#\n")
     val turn = game.turnOrder.map(e => e.pos)
     val expected = Vector(Pt(0, 2), Pt(0, 3), Pt(1, 0), Pt(1, 2))
     assert(turn.sameElements(expected))
   }
 
-  test("gameloop.targets") {
+  test("game.targets") {
     val game = parseGame("#.EG\nG.E#\n")
     val elf2 = game.entities.get(Pt(1, 2)).get
     val targetsForElf = game.targets(elf2)
@@ -80,11 +80,11 @@ class Year2018Day15Test extends AnyFunSuite {
     assert(targetsForElf == goblins.sortBy(_.pos.toTuple))
   }
 
-  test("gameloop.inRange") {
+  test("game.inRange") {
     val game = parseGame("#.EG\nG.E#\n")
 
     val goblin2 = game.entities.get(Pt(1, 0)).get
-    val inRangeOfGoblin2 = game.entities.toVector.filter(goblin2.inRange(_))
+    val inRangeOfGoblin2 = game.entities.toVector.filter(goblin2.inRange)
     assert(inRangeOfGoblin2.isEmpty)
 
     val elf1 = game.entities.get(Pt(0, 2)).get
@@ -92,5 +92,24 @@ class Year2018Day15Test extends AnyFunSuite {
     val expected =
       Vector(game.entities.get(Pt(0, 3)).get, game.entities.get(Pt(1, 2)).get)
     assert(inRangeOfElf1 == expected)
+  }
+
+  test("game.targetsInRange") {
+    val game = parseGame("#.EG\nG.E#\n")
+
+    val goblin2 = game.entities.get(Pt(1, 0)).get
+    assert(game.targetsInRange(goblin2).isEmpty)
+
+    val elf1 = game.entities.get(Pt(0, 2)).get
+    val expected = Vector(game.entities.get(Pt(0, 3)).get)
+    assert(game.targetsInRange(elf1) == expected)
+  }
+
+  test("game.destinations") {
+    val game = parseGame("#..E\nG.E#\n")
+    val goblin = game.entities.get(Pt(1, 0)).get
+    val dests = game.destinations(goblin)
+    val expected = Vector(Pt(0, 2), Pt(1, 1))
+    assert(dests == expected)
   }
 }
