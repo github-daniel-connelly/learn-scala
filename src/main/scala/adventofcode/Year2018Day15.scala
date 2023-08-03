@@ -72,6 +72,7 @@ case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
     byId.removed(entity.id),
     byPos.removed(entity.pos)
   )
+  def entities: Iterable[Entity] = byPos.values
 }
 
 object EntityMap {
@@ -114,6 +115,16 @@ object Game {
     }
     new Game(map.toMap, EntityMap(entities), grid.data.size, grid.data(0).size)
   }
+}
+
+// ============================================================================
+// game logic
+
+object GameLoop {
+  def turnOrder(entities: Iterable[Entity]): Iterable[Entity] =
+    entities.toVector.sortBy(e => (e.pos.row, e.pos.col))
+  def targets(in: Iterable[Entity], forType: EntityType): Iterable[Entity] =
+    in.filter(_.typ != forType).toVector.sortBy(_.pos.toTuple)
 }
 
 // ============================================================================

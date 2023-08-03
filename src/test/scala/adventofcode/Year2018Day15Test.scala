@@ -6,6 +6,9 @@ import adventofcode.Year2018Day15._
 import adventofcode.Utils._
 
 class Year2018Day15Test extends AnyFunSuite {
+  def parseGame(s: String): Game =
+    Game.fromGrid(Grid.parse(Source.fromString(s)).get)
+
   test("grid.parsing") {
     val src = Source.fromString("#.EG\nG.E#\n")
     val grid = Grid.parse(src)
@@ -56,5 +59,34 @@ class Year2018Day15Test extends AnyFunSuite {
 
     assert(game.map.get(Pt(-1, -7)).isEmpty)
     assert(game.map.get(Pt(1, 2)).get == Floor)
+  }
+
+  test("gameloop.turnOrder") {
+    val game = parseGame("#.EG\nG.E#\n")
+    val turn = GameLoop.turnOrder(game.entities.entities).map(e => e.pos)
+    val expected = Vector(Pt(0, 2), Pt(0, 3), Pt(1, 0), Pt(1, 2))
+    assert(turn.sameElements(expected))
+  }
+
+  test("gameloop.targets") {
+    val game = parseGame("#.EG\nG.E#\n")
+
+    // reverse the order of the entities to test that we sort them properly
+    val entities =
+      game.entities.entities.toVector
+        .sortBy(e => (e.pos.row, e.pos.col))
+        .reverse
+    val targetsForElf = GameLoop.targets(entities, Elf)
+    val targetsForGoblin = GameLoop.targets(entities, Goblin)
+
+    // just filtering doesn't work
+    val elves = entities.filter(e => e.typ == Elf)
+    val goblins = entities.filter(e => e.typ == Goblin)
+    assert(targetsForGoblin != elves)
+    assert(targetsForElf != goblins)
+
+    // need them sorted
+    assert(targetsForGoblin == elves.sortBy(_.pos.toTuple))
+    assert(targetsForElf == goblins.sortBy(_.pos.toTuple))
   }
 }
