@@ -124,7 +124,7 @@ class Year2018Day15Test extends AnyFunSuite {
     )
     assert(destinations == expectedDestinations)
 
-    val dists = game.dists(elf, destinations.toSet)
+    val dists = game.dists(elf.pos, destinations.toSet)
     val expectedDists = Map(
       (Pt(1, 3), 2),
       (Pt(2, 2), 2),
@@ -133,8 +133,9 @@ class Year2018Day15Test extends AnyFunSuite {
     )
     assert(dists == expectedDists)
 
-    val chosen = game.destination(elf)
-    assert(chosen.get == Pt(1, 3))
+    val (chosen, dist) = game.destination(elf).get
+    assert(chosen == Pt(1, 3))
+    assert(dist == 2)
   }
 
   test("game.destination.none") {
@@ -145,5 +146,16 @@ class Year2018Day15Test extends AnyFunSuite {
 
   test("game.paths") {
     val game = parseGame("#######\n#.E...#\n#.....#\n#...G.#\n#######")
+    val elf = game.entities.get(Pt(1, 2)).get
+    val (dst, dist) = game.destination(elf).get
+    assert(dst == Pt(2, 4))
+    assert(dist == 3)
+    val paths = game.paths(elf.pos, dst, dist)
+    val expected = Set(
+      List(Pt(2, 2), Pt(2, 3), Pt(2, 4)),
+      List(Pt(1, 3), Pt(2, 3), Pt(2, 4)),
+      List(Pt(1, 3), Pt(1, 4), Pt(2, 4))
+    )
+    assert(paths.toSet == expected)
   }
 }

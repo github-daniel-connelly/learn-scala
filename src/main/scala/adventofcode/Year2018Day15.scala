@@ -138,19 +138,37 @@ case class Game(
       case _ => dists
     }
 
-  def dists(from: Entity, to: Set[Pt]): Map[Pt, Int] =
-    bfs(Queue((from.pos, 0)), to, Set(), Map())
+  def dists(from: Pt, to: Set[Pt]): Map[Pt, Int] =
+    bfs(Queue((from, 0)), to, Set(), Map())
 
-  def destination(entity: Entity): Option[Pt] = {
+  def destination(entity: Entity): Option[(Pt, Int)] = {
     val targets = this.targets(entity)
     if (targets.find(entity.inRange).isDefined) None
     else {
-      dists(entity, candidateDestinations(targets).toSet).toVector
+      dists(entity.pos, candidateDestinations(targets).toSet).toVector
         .sortBy(e => (e._2, e._1.toTuple))
         .headOption
-        .map(e => e._1)
     }
   }
+
+  type Path = List[Pt]
+  def dfs(
+      cur: Pt,
+      dst: Pt,
+      dist: Int,
+      v: Set[Pt],
+      path: Path,
+      acc: List[Path]
+  ): Iterable[Path] =
+    if (cur == dst) acc :+ path
+    else if (path.length >= dist) acc
+    else {
+      val nbrs = openNbrs(cur).filterNot(v.contains)
+      nbrs.flatMap(nbr => dfs(nbr, dst, dist, v.incl(cur), path :+ nbr, acc))
+    }
+
+  def paths(from: Pt, to: Pt, dist: Int): Iterable[Path] =
+    dfs(from, to, dist, Set(), List(), List())
 }
 
 object Game {
