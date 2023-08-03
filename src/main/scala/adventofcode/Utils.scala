@@ -7,4 +7,12 @@ object Utils {
     tries.foldLeft(Try(Seq.empty[T])) { (acc, tri) =>
       acc.flatMap(results => tri.map(value => results :+ value))
     }
+
+  case class Pt(row: Int, col: Int)
+
+  def flatten[T](grid: Seq[Seq[T]]): Seq[(Pt, T)] =
+    for {
+      (row, r) <- grid.zipWithIndex
+      (t, c) <- row.zipWithIndex
+    } yield (Pt(r, c), t)
 }
