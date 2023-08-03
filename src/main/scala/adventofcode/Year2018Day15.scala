@@ -54,57 +54,22 @@ object Grid {
 // ============================================================================
 // game representation
 
-case class Entity(
-    val typ: EntityType,
-    val id: Int,
-    val pos: Pt,
-    hp: Int = 200,
-    ap: Int = 3
-) {
+case class Entity(typ: EntityType, pos: Pt, hp: Int = 200, ap: Int = 3) {
   def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
-}
-
-// TODO: refactor this, we never use id
-case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
-  def size: Int = byId.size
-  def add(entity: Entity): EntityMap = EntityMap(
-    byId.updated(entity.id, entity),
-    byPos.updated(entity.pos, entity)
-  )
-  def get(id: Int): Option[Entity] = byId.get(id)
-  def get(pos: Pt): Option[Entity] = byPos.get(pos)
-  def remove(entity: Entity): EntityMap = EntityMap(
-    byId.removed(entity.id),
-    byPos.removed(entity.pos)
-  )
-  def toVector: Vector[Entity] = byPos.values.toVector
-  def contains(pt: Pt): Boolean = byPos.contains(pt)
-  def move(entity: Entity, to: Pt): EntityMap =
-    remove(entity).add(entity.copy(pos = to))
-  def update(entity: Entity): EntityMap =
-    add(entity)
-}
-
-object EntityMap {
-  def apply(entities: Seq[Entity]): EntityMap =
-    EntityMap(
-      entities.map(e => (e.id, e)).toMap,
-      entities.map(e => (e.pos, e)).toMap
-    )
 }
 
 // TODO: split this up
 // TODO: add better language for mutations
 case class Game(
     val map: Map[Pt, MapTile],
-    val entities: EntityMap,
+    val entities: Map[Pt, Entity],
     val height: Int,
     val width: Int
 ) {
   def toGrid: Grid = {
     // later values clobber earlier, so entities overwrite floors
     // invariant: at no point are entities standing on walls
-    val byPos = map ++ entities.byPos.map(p => (p._1, p._2.typ))
+    val byPos = map ++ entities.map(p => (p._1, p._2.typ))
     val data: Vector[Vector[Tile]] = Vector.fill(height, width)(Floor)
     Grid(byPos.foldLeft(data) { (acc, e) =>
       val (Pt(r, c), t) = e
@@ -112,11 +77,30 @@ case class Game(
     })
   }
 
+  override def toString: String = {
+    entities.values
+      .foldLeft(toGrid.toString.linesIterator.toVector) { (lines, entity) =>
+        {
+          val line = lines(entity.pos.row) + s" ${entity.typ.ch}(${entity.hp})"
+          lines.updated(entity.pos.row, line)
+        }
+      }
+      .mkString("\n")
+  }
+
+  override def equals(that: Any): Boolean = that match {
+    case that: Game =>
+      that.map == map && that.entities == entities && that.height == height && that.width == width
+    case _ => false
+  }
+
   def turnOrder: Iterable[Entity] =
-    entities.toVector.sortBy(e => (e.pos.row, e.pos.col))
+    entities.values.toVector.sortBy(e => (e.pos.row, e.pos.col))
 
   def targets(forEntity: Entity): Iterable[Entity] =
-    entities.toVector.filter(_.typ != forEntity.typ).sortBy(_.pos.toTuple)
+    entities.values.toVector
+      .filter(_.typ != forEntity.typ)
+      .sortBy(_.pos.toTuple)
 
   def openNbrs(pt: Pt): Iterable[Pt] = pt.nbrs
     .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
@@ -184,8 +168,11 @@ case class Game(
       .sortBy(p => p.toTuple)
       .headOption
 
-  def apply(entity: Entity, step: Pt): Game =
-    copy(entities = entities.move(entity, step))
+  def applyStep(entity: Entity, step: Pt): Game = {
+    copy(entities =
+      entities.removed(entity.pos).updated(step, entity.copy(pos = step))
+    )
+  }
 
   def chooseTarget(entity: Entity): Option[Entity] =
     entity.pos.nbrs
@@ -198,10 +185,22 @@ case class Game(
   def attack(from: Entity, to: Entity): Game = {
     val updated = to.copy(hp = to.hp - from.ap)
     val updatedEntities =
-      if (updated.hp <= 0) entities.remove(updated)
-      else entities.update(updated)
+      if (updated.hp <= 0) entities.removed(updated.pos)
+      else entities.updated(updated.pos, updated)
     copy(entities = updatedEntities)
   }
+
+  def takeTurn(entity: Entity): Game = {
+    destination(entity)
+      .flatMap(dest => step(entity.pos, dest._1, dest._2))
+      .map(applyStep(entity, _))
+      .getOrElse(this)
+      .chooseTarget(entity)
+      .map(attack(entity, _))
+      .getOrElse(this)
+  }
+
+  def playRound: Game = ???
 }
 
 object Game {
@@ -211,11 +210,11 @@ object Game {
       case (pt, Wall) => (pt, Wall)
       case (pt, _)    => (pt, Floor)
     }
-    val entities = tiles.zipWithIndex.collect {
-      case ((pt, Elf), id)    => Entity(Elf, id, pt)
-      case ((pt, Goblin), id) => Entity(Goblin, id, pt)
+    val entities = tiles.collect {
+      case (pt, Elf)    => (pt, Entity(Elf, pt))
+      case (pt, Goblin) => (pt, Entity(Goblin, pt))
     }
-    new Game(map.toMap, EntityMap(entities), grid.data.size, grid.data(0).size)
+    new Game(map.toMap, entities.toMap, grid.data.size, grid.data(0).size)
   }
 }
 

@@ -7,7 +7,7 @@ import adventofcode.Utils._
 
 class Year2018Day15Test extends AnyFunSuite {
   def parseGame(s: String): Game =
-    Game.fromGrid(Grid.parse(Source.fromString(s)).get)
+    Game.fromGrid(Grid.parse(Source.fromString(trimLinesLeft(s))).get)
 
   def trimLinesLeft(s: String): String =
     s.linesIterator.map(_.trim).filterNot(_.isEmpty).mkString("\n")
@@ -17,7 +17,7 @@ class Year2018Day15Test extends AnyFunSuite {
       game
         .destination(entity)
         .flatMap(where => game.step(entity.pos, where._1, where._2))
-        .map(game.apply(entity, _))
+        .map(game.applyStep(entity, _))
         .getOrElse(game)
     }
 
@@ -42,20 +42,15 @@ class Year2018Day15Test extends AnyFunSuite {
   }
 
   test("entitymap") {
-    var m = EntityMap(Map(), Map())
-    assert(m.size == 0)
-
-    val e = Entity(Elf, 123, Pt(7, 3))
-    m = m.add(e)
+    var m: Map[Pt, Entity] = Map()
+    val e = Entity(Elf, Pt(7, 3))
+    m = m.updated(e.pos, e)
     assert(m.size == 1)
-    assert(m.get(456).isEmpty)
-    assert(m.get(123).get == e)
     assert(m.get(Pt(-1, -7)).isEmpty)
     assert(m.get(Pt(7, 3)).get == e)
 
-    m = m.remove(e)
+    m = m.removed(e.pos)
     assert(m.size == 0)
-    assert(m.get(123).isEmpty)
     assert(m.get(Pt(7, 3)).isEmpty)
   }
 
@@ -86,21 +81,21 @@ class Year2018Day15Test extends AnyFunSuite {
     val targetsForElf = game.targets(elf2)
     val goblin1 = game.entities.get(Pt(0, 3)).get
     val targetsForGoblin = game.targets(goblin1)
-    val elves = game.entities.toVector.filter(e => e.typ == Elf)
-    val goblins = game.entities.toVector.filter(e => e.typ == Goblin)
-    assert(targetsForGoblin == elves.sortBy(_.pos.toTuple))
-    assert(targetsForElf == goblins.sortBy(_.pos.toTuple))
+    val elves = game.entities.values.filter(e => e.typ == Elf)
+    val goblins = game.entities.values.filter(e => e.typ == Goblin)
+    assert(targetsForGoblin == elves.toVector.sortBy(_.pos.toTuple))
+    assert(targetsForElf == goblins.toVector.sortBy(_.pos.toTuple))
   }
 
   test("game.inRange") {
     val game = parseGame("#.EG\nG.E#\n")
 
     val goblin2 = game.entities.get(Pt(1, 0)).get
-    val inRangeOfGoblin2 = game.entities.toVector.filter(goblin2.inRange)
+    val inRangeOfGoblin2 = game.entities.values.filter(goblin2.inRange)
     assert(inRangeOfGoblin2.isEmpty)
 
     val elf1 = game.entities.get(Pt(0, 2)).get
-    val inRangeOfElf1 = game.entities.toVector.filter(elf1.inRange)
+    val inRangeOfElf1 = game.entities.values.filter(elf1.inRange)
     val expected =
       Vector(game.entities.get(Pt(0, 3)).get, game.entities.get(Pt(1, 2)).get)
     assert(inRangeOfElf1 == expected)
@@ -173,7 +168,7 @@ class Year2018Day15Test extends AnyFunSuite {
   }
 
   test("game.movement") {
-    val game = parseGame(trimLinesLeft("""
+    val game = parseGame("""
       #########
       #G..G..G#
       #.......#
@@ -182,9 +177,9 @@ class Year2018Day15Test extends AnyFunSuite {
       #.......#
       #.......#
       #G..G..G#
-      #########"""))
+      #########""")
     val result = (1 to 4).foldLeft(game) { (game, _) => stepAll(game) }
-    val expected = parseGame(trimLinesLeft("""
+    val expected = parseGame("""
       #########
       #.......#
       #..GGG..#
@@ -193,22 +188,22 @@ class Year2018Day15Test extends AnyFunSuite {
       #......G#
       #.......#
       #.......#
-      #########"""))
+      #########""")
     assert(expected.toGrid == result.toGrid)
   }
 
   test("game.chooseTarget") {
-    val start = parseGame(trimLinesLeft("""
+    val start = parseGame("""
 G....
 ..G..
 ..EG.
 ..G..
-...G."""))
+...G.""")
     val game = start.copy(entities =
       start.entities
-        .update(start.entities.get(Pt(1, 2)).get.copy(hp = 4))
-        .update(start.entities.get(Pt(2, 3)).get.copy(hp = 2))
-        .update(start.entities.get(Pt(3, 2)).get.copy(hp = 2))
+        .updated(Pt(1, 2), start.entities.get(Pt(1, 2)).get.copy(hp = 4))
+        .updated(Pt(2, 3), start.entities.get(Pt(2, 3)).get.copy(hp = 2))
+        .updated(Pt(3, 2), start.entities.get(Pt(3, 2)).get.copy(hp = 2))
     )
     val elf = game.entities.get(Pt(2, 2)).get
     val target = game.chooseTarget(elf).get
@@ -216,52 +211,84 @@ G....
   }
 
   test("game.chooseTarget.none") {
-    val game = parseGame(trimLinesLeft("""
+    val game = parseGame("""
 G....
 ..G..
 ..EG.
 ..G..
-...G."""))
+...G.""")
     val goblin = game.entities.get(Pt(0, 0)).get
     val target = game.chooseTarget(goblin)
     assert(target.isEmpty)
   }
 
   test("game.attack") {
-    var game = parseGame(trimLinesLeft("""
+    var game = parseGame("""
 G....
 ..G..
 ..EG.
 ..G..
-...G."""))
+...G.""")
     game = game.copy(entities =
       game.entities
-        .update(game.entities.get(Pt(1, 2)).get.copy(hp = 4))
-        .update(game.entities.get(Pt(2, 3)).get.copy(hp = 2))
-        .update(game.entities.get(Pt(3, 2)).get.copy(hp = 2))
+        .updated(Pt(1, 2), game.entities.get(Pt(1, 2)).get.copy(hp = 4))
+        .updated(Pt(2, 3), game.entities.get(Pt(2, 3)).get.copy(hp = 2))
+        .updated(Pt(3, 2), game.entities.get(Pt(3, 2)).get.copy(hp = 2))
     )
     val elf = game.entities.get(Pt(2, 2)).get
 
     val goblinAbove = game.entities.get(Pt(1, 2)).get
     val after1 = game.attack(elf, goblinAbove)
-    var expected1 = parseGame(trimLinesLeft("""
+    var expected1 = parseGame("""
 G....
 ..G..
 ..EG.
 ..G..
-...G."""))
+...G.""")
     assert(after1.toGrid == expected1.toGrid)
     assert(after1.entities.get(Pt(1, 2)).get.hp == 1)
 
     val goblinRight = after1.entities.get(Pt(2, 3)).get
     val after2 = after1.attack(elf, goblinRight)
-    var expected2 = parseGame(trimLinesLeft("""
+    var expected2 = parseGame("""
 G....
 ..G..
 ..E..
 ..G..
-...G."""))
+...G.""")
     assert(after2.toGrid == expected2.toGrid)
     assert(after2.entities.get(Pt(2, 3)).isEmpty)
+  }
+
+  test("game.takeTurn") {
+    var game = parseGame("""
+G....
+..G..
+..EG.
+..G..
+...G.""")
+    // TODO: this is horrible
+    game = game.copy(entities =
+      game.entities
+        .updated(Pt(1, 2), game.entities.get(Pt(1, 2)).get.copy(hp = 4))
+        .updated(Pt(2, 3), game.entities.get(Pt(2, 3)).get.copy(hp = 2))
+        .updated(Pt(3, 2), game.entities.get(Pt(3, 2)).get.copy(hp = 2))
+    )
+    val elf = game.entities.get(Pt(2, 2)).get
+    val result = game.takeTurn(elf)
+// expect to have killed the weak goblin to the right of the elf
+    var expected = game.copy(entities = game.entities.removed(Pt(2, 3)))
+    assert(result == expected)
+  }
+
+  test("game.playRound") {
+    val game = parseGame("""
+      #######   
+      #.G...#
+      #...EG#
+      #.#.#G#
+      #..G#E#
+      #.....#
+      #######""")
   }
 }
