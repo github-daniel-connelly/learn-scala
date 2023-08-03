@@ -18,6 +18,7 @@ class Year2018Day15Test extends AnyFunSuite {
         .destination(entity)
         .flatMap(where => game.step(entity.pos, where._1, where._2))
         .map(game.applyStep(entity, _))
+        .map(_._1)
         .getOrElse(game)
     }
 
@@ -260,24 +261,52 @@ G....
     assert(after2.entities.get(Pt(2, 3)).isEmpty)
   }
 
+  test("game.applyStep") {
+    var game = parseGame("""
+G....
+.....
+.E.G.
+G.G..
+...G.""")
+    val elf = game.entities.get(Pt(2, 1)).get
+    val (updatedGame, updatedElf) = game.applyStep(elf, Pt(1, 1))
+    var expected = parseGame("""
+G....
+.E...
+...G.
+G.G..
+...G.""")
+    assert(updatedElf == elf.copy(pos = Pt(1, 1)))
+    assert(updatedGame.toGrid == expected.toGrid)
+  }
+
   test("game.takeTurn") {
     var game = parseGame("""
 G....
-..G..
-..EG.
-..G..
+G.G..
+.E.G.
+.....
 ...G.""")
+
     // TODO: this is horrible
     game = game.copy(entities =
       game.entities
-        .updated(Pt(1, 2), game.entities.get(Pt(1, 2)).get.copy(hp = 4))
-        .updated(Pt(2, 3), game.entities.get(Pt(2, 3)).get.copy(hp = 2))
-        .updated(Pt(3, 2), game.entities.get(Pt(3, 2)).get.copy(hp = 2))
+        .updated(Pt(1, 0), game.entities.get(Pt(1, 0)).get.copy(hp = 2))
+        .updated(Pt(1, 2), game.entities.get(Pt(1, 2)).get.copy(hp = 2))
+        .updated(Pt(2, 3), game.entities.get(Pt(2, 3)).get.copy(hp = 4))
     )
-    val elf = game.entities.get(Pt(2, 2)).get
+    val elf = game.entities.get(Pt(2, 1)).get
+
     val result = game.takeTurn(elf)
-// expect to have killed the weak goblin to the right of the elf
-    var expected = game.copy(entities = game.entities.removed(Pt(2, 3)))
+    // expect to have killed the weak goblin to the right of the elf
+    var expected = game.copy(entities =
+      game.entities
+        .removed(Pt(1, 0))
+        .removed(Pt(2, 1))
+        .updated(Pt(1, 1), elf.copy(pos = Pt(1, 1)))
+    )
+
+    assert(result.toGrid == expected.toGrid)
     assert(result == expected)
   }
 
@@ -290,5 +319,13 @@ G....
       #..G#E#
       #.....#
       #######""")
+    info(game.toString)
+    (1 to 47).foldLeft(game) { (game, i) =>
+      {
+        val next = game.playRound
+        info(s"$i $next")
+        next
+      }
+    }
   }
 }

@@ -78,19 +78,20 @@ case class Game(
   }
 
   override def toString: String = {
-    entities.values
+    ("" +: entities.values
       .foldLeft(toGrid.toString.linesIterator.toVector) { (lines, entity) =>
         {
           val line = lines(entity.pos.row) + s" ${entity.typ.ch}(${entity.hp})"
           lines.updated(entity.pos.row, line)
         }
-      }
+      })
       .mkString("\n")
   }
 
   override def equals(that: Any): Boolean = that match {
     case that: Game =>
-      that.map == map && that.entities == entities && that.height == height && that.width == width
+      that.map == map && that.entities == entities &&
+      that.height == height && that.width == width
     case _ => false
   }
 
@@ -168,10 +169,11 @@ case class Game(
       .sortBy(p => p.toTuple)
       .headOption
 
-  def applyStep(entity: Entity, step: Pt): Game = {
-    copy(entities =
-      entities.removed(entity.pos).updated(step, entity.copy(pos = step))
-    )
+  def applyStep(entity: Entity, step: Pt): (Game, Entity) = {
+    val entity2 = entity.copy(pos = step)
+    val game2 =
+      copy(entities = entities.removed(entity.pos).updated(step, entity2))
+    (game2, entity2)
   }
 
   def chooseTarget(entity: Entity): Option[Entity] =
@@ -191,16 +193,19 @@ case class Game(
   }
 
   def takeTurn(entity: Entity): Game = {
-    destination(entity)
-      .flatMap(dest => step(entity.pos, dest._1, dest._2))
-      .map(applyStep(entity, _))
-      .getOrElse(this)
-      .chooseTarget(entity)
-      .map(attack(entity, _))
-      .getOrElse(this)
+    val (game, updated) =
+      destination(entity)
+        .flatMap(dest => step(entity.pos, dest._1, dest._2))
+        .map(applyStep(entity, _))
+        .getOrElse((this, entity))
+    game
+      .chooseTarget(updated)
+      .map(game.attack(updated, _))
+      .getOrElse(game)
   }
 
-  def playRound: Game = ???
+  def playRound: Game =
+    entities.values.foldLeft(this) { (game, entity) => game.takeTurn(entity) }
 }
 
 object Game {
