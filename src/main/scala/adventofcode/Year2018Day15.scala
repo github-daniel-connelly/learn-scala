@@ -54,10 +54,17 @@ object Grid {
 // ============================================================================
 // game representation
 
-case class Entity(val typ: EntityType, val id: Int, val pos: Pt) {
+case class Entity(
+    val typ: EntityType,
+    val id: Int,
+    val pos: Pt,
+    hp: Int = 200,
+    ap: Int = 3
+) {
   def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
 }
 
+// TODO: refactor this, we never use id
 case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
   def size: Int = byId.size
   def add(entity: Entity): EntityMap = EntityMap(
@@ -74,6 +81,8 @@ case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
   def contains(pt: Pt): Boolean = byPos.contains(pt)
   def move(entity: Entity, to: Pt): EntityMap =
     remove(entity).add(entity.copy(pos = to))
+  def update(entity: Entity): EntityMap =
+    add(entity)
 }
 
 object EntityMap {
@@ -84,6 +93,8 @@ object EntityMap {
     )
 }
 
+// TODO: split this up
+// TODO: add better language for mutations
 case class Game(
     val map: Map[Pt, MapTile],
     val entities: EntityMap,
@@ -175,6 +186,22 @@ case class Game(
 
   def apply(entity: Entity, step: Pt): Game =
     copy(entities = entities.move(entity, step))
+
+  def chooseTarget(entity: Entity): Option[Entity] =
+    entity.pos.nbrs
+      .flatMap(entities.get)
+      .filter(_.typ != entity.typ)
+      .toVector
+      .sortBy(e => (e.hp, e.pos.toTuple))
+      .headOption
+
+  def attack(from: Entity, to: Entity): Game = {
+    val updated = to.copy(hp = to.hp - from.ap)
+    val updatedEntities =
+      if (updated.hp <= 0) entities.remove(updated)
+      else entities.update(updated)
+    copy(entities = updatedEntities)
+  }
 }
 
 object Game {

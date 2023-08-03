@@ -196,4 +196,72 @@ class Year2018Day15Test extends AnyFunSuite {
       #########"""))
     assert(expected.toGrid == result.toGrid)
   }
+
+  test("game.chooseTarget") {
+    val start = parseGame(trimLinesLeft("""
+G....
+..G..
+..EG.
+..G..
+...G."""))
+    val game = start.copy(entities =
+      start.entities
+        .update(start.entities.get(Pt(1, 2)).get.copy(hp = 4))
+        .update(start.entities.get(Pt(2, 3)).get.copy(hp = 2))
+        .update(start.entities.get(Pt(3, 2)).get.copy(hp = 2))
+    )
+    val elf = game.entities.get(Pt(2, 2)).get
+    val target = game.chooseTarget(elf).get
+    assert(target == game.entities.get(Pt(2, 3)).get)
+  }
+
+  test("game.chooseTarget.none") {
+    val game = parseGame(trimLinesLeft("""
+G....
+..G..
+..EG.
+..G..
+...G."""))
+    val goblin = game.entities.get(Pt(0, 0)).get
+    val target = game.chooseTarget(goblin)
+    assert(target.isEmpty)
+  }
+
+  test("game.attack") {
+    var game = parseGame(trimLinesLeft("""
+G....
+..G..
+..EG.
+..G..
+...G."""))
+    game = game.copy(entities =
+      game.entities
+        .update(game.entities.get(Pt(1, 2)).get.copy(hp = 4))
+        .update(game.entities.get(Pt(2, 3)).get.copy(hp = 2))
+        .update(game.entities.get(Pt(3, 2)).get.copy(hp = 2))
+    )
+    val elf = game.entities.get(Pt(2, 2)).get
+
+    val goblinAbove = game.entities.get(Pt(1, 2)).get
+    val after1 = game.attack(elf, goblinAbove)
+    var expected1 = parseGame(trimLinesLeft("""
+G....
+..G..
+..EG.
+..G..
+...G."""))
+    assert(after1.toGrid == expected1.toGrid)
+    assert(after1.entities.get(Pt(1, 2)).get.hp == 1)
+
+    val goblinRight = after1.entities.get(Pt(2, 3)).get
+    val after2 = after1.attack(elf, goblinRight)
+    var expected2 = parseGame(trimLinesLeft("""
+G....
+..G..
+..E..
+..G..
+...G."""))
+    assert(after2.toGrid == expected2.toGrid)
+    assert(after2.entities.get(Pt(2, 3)).isEmpty)
+  }
 }
