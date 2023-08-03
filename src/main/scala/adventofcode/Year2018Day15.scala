@@ -138,8 +138,19 @@ case class Game(
       case _ => dists
     }
 
-  def dists(from: Entity, to: Set[Pt]): Iterable[(Pt, Int)] =
-    bfs(Queue((from.pos, 0)), to, Set(), Map()).toVector.sortBy(_._1.toTuple)
+  def dists(from: Entity, to: Set[Pt]): Map[Pt, Int] =
+    bfs(Queue((from.pos, 0)), to, Set(), Map())
+
+  def destination(entity: Entity): Option[Pt] = {
+    val targets = this.targets(entity)
+    if (targets.find(entity.inRange).isDefined) None
+    else {
+      dists(entity, candidateDestinations(targets).toSet).toVector
+        .sortBy(e => (e._2, e._1.toTuple))
+        .headOption
+        .map(e => e._1)
+    }
+  }
 }
 
 object Game {
