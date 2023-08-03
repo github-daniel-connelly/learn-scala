@@ -63,29 +63,19 @@ class Year2018Day15Test extends AnyFunSuite {
 
   test("gameloop.turnOrder") {
     val game = parseGame("#.EG\nG.E#\n")
-    val turn = GameLoop.turnOrder(game.entities.entities).map(e => e.pos)
+    val turn = game.turnOrder.map(e => e.pos)
     val expected = Vector(Pt(0, 2), Pt(0, 3), Pt(1, 0), Pt(1, 2))
     assert(turn.sameElements(expected))
   }
 
   test("gameloop.targets") {
     val game = parseGame("#.EG\nG.E#\n")
-
-    // reverse the order of the entities to test that we sort them properly
-    val entities =
-      game.entities.entities.toVector
-        .sortBy(e => (e.pos.row, e.pos.col))
-        .reverse
-    val targetsForElf = GameLoop.targets(entities, Elf)
-    val targetsForGoblin = GameLoop.targets(entities, Goblin)
-
-    // just filtering doesn't work
-    val elves = entities.filter(e => e.typ == Elf)
-    val goblins = entities.filter(e => e.typ == Goblin)
-    assert(targetsForGoblin != elves)
-    assert(targetsForElf != goblins)
-
-    // need them sorted
+    val elf2 = game.entities.get(Pt(1, 2)).get
+    val targetsForElf = game.targets(elf2)
+    val goblin1 = game.entities.get(Pt(0, 3)).get
+    val targetsForGoblin = game.targets(goblin1)
+    val elves = game.entities.toVector.filter(e => e.typ == Elf)
+    val goblins = game.entities.toVector.filter(e => e.typ == Goblin)
     assert(targetsForGoblin == elves.sortBy(_.pos.toTuple))
     assert(targetsForElf == goblins.sortBy(_.pos.toTuple))
   }
@@ -94,12 +84,11 @@ class Year2018Day15Test extends AnyFunSuite {
     val game = parseGame("#.EG\nG.E#\n")
 
     val goblin2 = game.entities.get(Pt(1, 0)).get
-    val inRangeOfGoblin2 =
-      game.entities.entities.filter(GameLoop.inRange(goblin2))
+    val inRangeOfGoblin2 = game.entities.toVector.filter(goblin2.inRange(_))
     assert(inRangeOfGoblin2.isEmpty)
 
     val elf1 = game.entities.get(Pt(0, 2)).get
-    val inRangeOfElf1 = game.entities.entities.filter(GameLoop.inRange(elf1))
+    val inRangeOfElf1 = game.entities.toVector.filter(elf1.inRange)
     val expected =
       Vector(game.entities.get(Pt(0, 3)).get, game.entities.get(Pt(1, 2)).get)
     assert(inRangeOfElf1 == expected)

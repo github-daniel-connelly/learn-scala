@@ -56,6 +56,8 @@ sealed trait Entity {
   def id: Int
   def pos: Pt
   def typ: EntityType
+
+  def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
 }
 case class ElfEntity(id: Int, pos: Pt) extends Entity { val typ = Elf }
 case class GoblinEntity(id: Int, pos: Pt) extends Entity { val typ = Goblin }
@@ -72,7 +74,7 @@ case class EntityMap(val byId: Map[Int, Entity], val byPos: Map[Pt, Entity]) {
     byId.removed(entity.id),
     byPos.removed(entity.pos)
   )
-  def entities: Iterable[Entity] = byPos.values
+  def toVector: Vector[Entity] = byPos.values.toVector
 }
 
 object EntityMap {
@@ -100,6 +102,12 @@ case class Game(
       acc.updated(r, acc(r).updated(c, t))
     })
   }
+
+  def turnOrder: Iterable[Entity] =
+    entities.toVector.sortBy(e => (e.pos.row, e.pos.col))
+
+  def targets(forEntity: Entity): Iterable[Entity] =
+    entities.toVector.filter(_.typ != forEntity.typ).sortBy(_.pos.toTuple)
 }
 
 object Game {
@@ -115,18 +123,6 @@ object Game {
     }
     new Game(map.toMap, EntityMap(entities), grid.data.size, grid.data(0).size)
   }
-}
-
-// ============================================================================
-// game logic
-
-object GameLoop {
-  def turnOrder(entities: Iterable[Entity]): Iterable[Entity] =
-    entities.toVector.sortBy(e => (e.pos.row, e.pos.col))
-  def targets(in: Iterable[Entity], forType: EntityType): Iterable[Entity] =
-    in.filter(_.typ != forType).toVector.sortBy(_.pos.toTuple)
-  def inRange(of: Entity)(target: Entity): Boolean =
-    of.pos.adjacent(target.pos)
 }
 
 // ============================================================================
