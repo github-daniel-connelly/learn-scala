@@ -169,6 +169,13 @@ case class Game(
 
   def paths(from: Pt, to: Pt, dist: Int): Iterable[Path] =
     dfs(from, to, dist, Set(), List(), List())
+
+  def step(from: Pt, to: Pt, pathLength: Int): Option[Pt] =
+    paths(from, to, pathLength)
+      .flatMap(path => path.headOption)
+      .toVector
+      .sortBy(p => p.toTuple)
+      .headOption
 }
 
 object Game {

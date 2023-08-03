@@ -157,5 +157,6 @@ class Year2018Day15Test extends AnyFunSuite {
       List(Pt(1, 3), Pt(1, 4), Pt(2, 4))
     )
     assert(paths.toSet == expected)
+    assert(game.step(elf.pos, dst, dist).get == Pt(1, 3))
   }
 }
