@@ -108,11 +108,8 @@ case class Game(
   def targets(forEntity: Entity): Iterable[Entity] =
     entities.toVector.filter(_.typ != forEntity.typ).sortBy(_.pos.toTuple)
 
-  def targetsInRange(entity: Entity): Iterable[Entity] =
-    targets(entity).filter(entity.inRange)
-
-  def destinations(entity: Entity): Iterable[Pt] =
-    targets(entity)
+  def candidateDestinations(forTargets: Iterable[Entity]): Iterable[Pt] =
+    forTargets
       .flatMap(_.pos.nbrs)
       .toSet
       .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)

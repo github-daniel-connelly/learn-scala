@@ -94,21 +94,10 @@ class Year2018Day15Test extends AnyFunSuite {
     assert(inRangeOfElf1 == expected)
   }
 
-  test("game.targetsInRange") {
-    val game = parseGame("#.EG\nG.E#\n")
-
-    val goblin2 = game.entities.get(Pt(1, 0)).get
-    assert(game.targetsInRange(goblin2).isEmpty)
-
-    val elf1 = game.entities.get(Pt(0, 2)).get
-    val expected = Vector(game.entities.get(Pt(0, 3)).get)
-    assert(game.targetsInRange(elf1) == expected)
-  }
-
   test("game.destinations") {
     val game = parseGame("#..E\nG.E#\n")
     val goblin = game.entities.get(Pt(1, 0)).get
-    val dests = game.destinations(goblin)
+    val dests = game.candidateDestinations(game.targets(goblin))
     val expected = Vector(Pt(0, 2), Pt(1, 1))
     assert(dests == expected)
   }
