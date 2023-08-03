@@ -10,6 +10,8 @@ object Utils {
 
   case class Pt(row: Int, col: Int) {
     def toTuple: (Int, Int) = (row, col)
+    def adjacent(that: Pt): Boolean =
+      (row - that.row).abs + (col - that.col).abs == 1
   }
 
   def flatten[T](grid: Seq[Seq[T]]): Seq[(Pt, T)] =

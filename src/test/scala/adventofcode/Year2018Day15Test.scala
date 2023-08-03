@@ -89,4 +89,19 @@ class Year2018Day15Test extends AnyFunSuite {
     assert(targetsForGoblin == elves.sortBy(_.pos.toTuple))
     assert(targetsForElf == goblins.sortBy(_.pos.toTuple))
   }
+
+  test("gameloop.inRange") {
+    val game = parseGame("#.EG\nG.E#\n")
+
+    val goblin2 = game.entities.get(Pt(1, 0)).get
+    val inRangeOfGoblin2 =
+      game.entities.entities.filter(GameLoop.inRange(goblin2))
+    assert(inRangeOfGoblin2.isEmpty)
+
+    val elf1 = game.entities.get(Pt(0, 2)).get
+    val inRangeOfElf1 = game.entities.entities.filter(GameLoop.inRange(elf1))
+    val expected =
+      Vector(game.entities.get(Pt(0, 3)).get, game.entities.get(Pt(1, 2)).get)
+    assert(inRangeOfElf1 == expected)
+  }
 }

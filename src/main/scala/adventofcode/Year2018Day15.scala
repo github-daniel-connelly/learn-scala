@@ -125,6 +125,8 @@ object GameLoop {
     entities.toVector.sortBy(e => (e.pos.row, e.pos.col))
   def targets(in: Iterable[Entity], forType: EntityType): Iterable[Entity] =
     in.filter(_.typ != forType).toVector.sortBy(_.pos.toTuple)
+  def inRange(of: Entity)(target: Entity): Boolean =
+    of.pos.adjacent(target.pos)
 }
 
 // ============================================================================
