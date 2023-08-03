@@ -58,6 +58,12 @@ case class Entity(typ: EntityType, pos: Pt, hp: Int = 200, ap: Int = 3) {
   def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
 }
 
+sealed trait Destination
+case object Stay extends Destination
+case object NoTargets extends Destination
+case object NoneReachable extends Destination
+case class Dest(pos: Pt, dist: Int) extends Destination
+
 // TODO: split this up
 // TODO: add better language for mutations
 case class Game(
@@ -133,13 +139,19 @@ case class Game(
   def dists(from: Pt, to: Set[Pt]): Map[Pt, Int] =
     bfs(Queue((from, 0)), to, Set(), Map())
 
-  def destination(entity: Entity): Option[(Pt, Int)] = {
+  def destination(entity: Entity): Destination = {
+    // TODO: refactor
     val targets = this.targets(entity)
-    if (targets.find(entity.inRange).isDefined) None
+    if (targets.isEmpty) NoTargets
+    if (targets.find(entity.inRange).isDefined) Stay
     else {
-      dists(entity.pos, candidateDestinations(targets).toSet).toVector
-        .sortBy(e => (e._2, e._1.toTuple))
-        .headOption
+      val allDists = dists(entity.pos, candidateDestinations(targets).toSet)
+      if (allDists.isEmpty) NoneReachable
+      else {
+        val (dest, dist) =
+          allDists.toVector.sortBy(e => (e._2, e._1.toTuple)).head
+        Dest(dest, dist)
+      }
     }
   }
 
@@ -192,20 +204,22 @@ case class Game(
     copy(entities = updatedEntities)
   }
 
-  def takeTurn(entity: Entity): Game = {
-    val (game, updated) =
-      destination(entity)
-        .flatMap(dest => step(entity.pos, dest._1, dest._2))
-        .map(applyStep(entity, _))
-        .getOrElse((this, entity))
-    game
-      .chooseTarget(updated)
-      .map(game.attack(updated, _))
-      .getOrElse(game)
+  def takeTurn(entity: Entity): Option[Game] = {
+    // TODO: no
+    (destination(entity) match {
+      case NoTargets     => None
+      case NoneReachable => Some((this, entity))
+      case Stay          => Some((this, entity))
+      case Dest(p, d)    => Some(applyStep(entity, step(entity.pos, p, d).get))
+    }).flatMap(pair =>
+      pair._1
+        .chooseTarget(pair._2)
+        .map(target => pair._1.attack(pair._2, target))
+    )
   }
 
-  def playRound: Game =
-    entities.values.foldLeft(this) { (game, entity) => game.takeTurn(entity) }
+  // TODO: add back IDs
+  def playRound: Option[Game] = ???
 }
 
 object Game {
