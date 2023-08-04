@@ -1,0 +1,7 @@
+# what is this?
+
+some scala practice code
+
+# what do i do?
+
+sbt 'runMain adventofcode.Year2018Day15 input/year2018day15_input.txt'
