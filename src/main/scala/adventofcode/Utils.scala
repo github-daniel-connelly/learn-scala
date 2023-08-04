@@ -12,11 +12,12 @@ object Utils {
     def toTuple: (Int, Int) = (row, col)
     def adjacent(that: Pt): Boolean =
       (row - that.row).abs + (col - that.col).abs == 1
+    // return these in reading order
     def nbrs: List[Pt] = List(
       Pt(row - 1, col),
-      Pt(row + 1, col),
       Pt(row, col - 1),
-      Pt(row, col + 1)
+      Pt(row, col + 1),
+      Pt(row + 1, col)
     )
   }
 

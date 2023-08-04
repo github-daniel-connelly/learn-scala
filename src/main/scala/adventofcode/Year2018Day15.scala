@@ -135,21 +135,22 @@ object Search {
       v: Set[Pt],
       dists: Map[Pt, Int]
   ): Map[Pt, Int] = {
-    q match {
-      case (p, d) +: tail => {
-        // Console.println(s"bfs: $p")
-        val nbrs = openNbrs(p).filterNot(v.contains).map(p => (p, d + 1))
-        val nextDists = if (dests.contains(p)) dists.updated(p, d) else dists
-        bfs(
-          openNbrs,
-          tail.appendedAll(nbrs),
-          dests,
-          v.incl(p) ++ nbrs.map(_._1),
-          nextDists
-        )
+    if (dists.size == dests.size) dists
+    else
+      q match {
+        case (p, d) +: tail => {
+          val nbrs = openNbrs(p).filterNot(v.contains).map(p => (p, d + 1))
+          val nextDists = if (dests.contains(p)) dists.updated(p, d) else dists
+          bfs(
+            openNbrs,
+            tail.appendedAll(nbrs),
+            dests,
+            v.incl(p) ++ nbrs.map(_._1),
+            nextDists
+          )
+        }
+        case _ => dists
       }
-      case _ => dists
-    }
   }
 
   type Path = List[Pt]
@@ -247,10 +248,8 @@ case class Game(
     from.pos.adjacent(to.pos)
 
   def dists(pos: Pt, dests: Iterable[Pt]): Map[Pt, Int] = {
-    Console.println(s"finding distances from $pos to ${dests.size} positions")
     val dists =
       Search.bfs(allOpenNbrs, Queue((pos, 0)), dests.toSet, Set(pos), Map())
-    Console.println("done")
     dists
   }
 
@@ -264,26 +263,24 @@ case class Game(
 
   def destination(entity: Entity): Destination = {
     val targets = this.targets(entity)
-    // Console.println(s"${entity.id} has ${targets.size} targets")
     if (targets.isEmpty) NoTargets
     else if (targets.find(target => inRange(entity, target)).isDefined) Stay
     else chooseDestination(entity, candidateDestinations(targets))
   }
 
   def paths(from: Pt, to: Pt, pathLength: Int): Iterable[Search.Path] = {
-    Console.println(s"finding paths of length $pathLength from $from to $to")
     val paths =
       Search.dfs(allOpenNbrs, from, to, pathLength, Set(), List(), List())
-    Console.println("done")
     paths
   }
 
-  def step(from: Pt, to: Pt, pathLength: Int): Pt =
-    paths(from, to, pathLength)
-      .flatMap(path => path.headOption)
-      .toVector
-      .sortBy(pt => pt.toTuple)
+  def step(from: Pt, to: Pt, pathLength: Int): Pt = {
+    // do we really need to know all the paths? can we just determine if there
+    // is any path of this length from the four neighbors in reading order?
+    openNbrs(from)
+      .find(nbr => dists(nbr, List(to)).get(to).getOrElse(-1) == pathLength - 1)
       .head
+  }
 
   def chooseTarget(entity: Entity): Option[Entity] =
     entity.pos.nbrs
@@ -296,7 +293,6 @@ case class Game(
   def move(id: Id): Result = {
     val entity = entities.get(id)
     val dest = destination(entity)
-    // Console.println(s"$id wants to go to $dest")
     dest match {
       case NoTargets     => Finished(this)
       case NoneReachable => Continue(this)
@@ -311,7 +307,6 @@ case class Game(
   def attack(id: Id): Game = {
     val entity = entities.get(id)
     val target = chooseTarget(entity)
-    // Console.println(s"$id wants to attack $target")
     copy(entities =
       target
         .map(target => entities.attack(id, target.id))
@@ -320,7 +315,6 @@ case class Game(
   }
 
   def takeTurn(id: Id): Result = {
-    // Console.println(s"turn: $id")
     move(id) match {
       case Continue(game) => Continue(game.attack(id))
       case finished       => finished
@@ -341,7 +335,6 @@ case class Game(
 
   def play: (Game, Int) = {
     def play(game: Game, round: Int): (Game, Int) = {
-      Console.println(s"round $round")
       game.playRound match {
         case Continue(game) => play(game, round + 1)
         case Finished(game) => (game, round)
