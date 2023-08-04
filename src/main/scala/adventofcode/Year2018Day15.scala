@@ -5,6 +5,7 @@ import scala.util.{Try, Failure, Success}
 import adventofcode.Utils._
 import scala.collection.immutable.Queue
 import scala.collection.immutable.Queue.EmptyQueue
+import scala.annotation.tailrec
 
 // ============================================================================
 // basic models
@@ -88,19 +89,13 @@ case class Entities(
 
   def step(id: Id, to: Pt): Entities = {
     val pt = pos(id)
-    new Entities(
-      typ,
-      pos.updated(id, to),
-      byPos.removed(pt).updated(to, id),
-      hp,
-      ap
-    )
+    copy(pos = pos.updated(id, to), byPos = byPos.removed(pt).updated(to, id))
   }
 
   def attack(from: Id, to: Id): Entities = {
     val toHp = hp(to) - ap(from)
     if (toHp <= 0) remove(to)
-    else new Entities(typ, pos, byPos, hp.updated(to, toHp), ap)
+    else copy(hp = hp.updated(to, toHp))
   }
 
   def update(entity: Entity): Entities = {
@@ -132,21 +127,30 @@ object Entities {
 // algorithms
 
 object Search {
+  @tailrec
   def bfs(
       openNbrs: Map[Pt, Iterable[Pt]],
       q: Queue[(Pt, Int)],
       dests: Set[Pt],
       v: Set[Pt],
       dists: Map[Pt, Int]
-  ): Map[Pt, Int] =
+  ): Map[Pt, Int] = {
     q match {
       case (p, d) +: tail => {
+        // Console.println(s"bfs: $p")
         val nbrs = openNbrs(p).filterNot(v.contains).map(p => (p, d + 1))
         val nextDists = if (dests.contains(p)) dists.updated(p, d) else dists
-        bfs(openNbrs, tail ++ nbrs, dests, v.incl(p), nextDists)
+        bfs(
+          openNbrs,
+          tail.appendedAll(nbrs),
+          dests,
+          v.incl(p) ++ nbrs.map(_._1),
+          nextDists
+        )
       }
       case _ => dists
     }
+  }
 
   type Path = List[Pt]
   def dfs(
@@ -163,7 +167,15 @@ object Search {
     else {
       val nbrs = openNbrs(cur).filterNot(v.contains)
       nbrs.flatMap(nbr =>
-        dfs(openNbrs, nbr, dst, dist, v.incl(cur), path :+ nbr, acc)
+        dfs(
+          openNbrs,
+          nbr,
+          dst,
+          dist,
+          v.incl(cur) ++ nbrs,
+          path :+ nbr,
+          acc
+        )
       )
     }
 }
@@ -203,23 +215,14 @@ case class Game(
     })
   }
 
-  override def toString: String = {
-    entities.iterator
-      .foldLeft(toGrid.toString().linesIterator.toSeq) { (lines, e) =>
-        lines.updated(e.pos.row, lines(e.pos.row) + s" ${e.typ.ch}(${e.hp})")
-      }
-      .mkString("\n")
-  }
-
   def turnOrder: Iterable[Id] =
     entities.toVector.sortBy(e => e.pos.toTuple).map(_.id)
 
-  def targets(id: Id): Iterable[Id] = {
-    val entity = entities.get(id)
-    entities.toVector
+  def targets(entity: Entity): Iterable[Entity] = {
+    entities.iterator
       .filter(_.typ != entity.typ)
+      .toVector
       .sortBy(_.pos.toTuple)
-      .map(_.id)
   }
 
   def openNbrs(pt: Pt): Iterable[Pt] = pt.nbrs
@@ -227,27 +230,31 @@ case class Game(
     .filter(p => entities.find(p).isEmpty)
     .filter(p => map.getOrElse(p, Floor) == Floor)
 
-  def allOpenNbrs: Map[Pt, Iterable[Pt]] = {
+  // compute this eagerly as we need it several times
+  val allOpenNbrs: Map[Pt, Iterable[Pt]] =
     map.keys.map(pos => (pos, openNbrs(pos))).toMap
-  }
 
-  def candidateDestinations(forTargets: Iterable[Id]): Iterable[Pt] = {
+  def candidateDestinations(forTargets: Iterable[Entity]): Iterable[Pt] = {
     val nbrs = allOpenNbrs
     forTargets
-      .flatMap(e => nbrs(entities.get(e).pos))
+      .flatMap(e => nbrs(e.pos))
       .toSet
       .toVector
       .sortBy((p: Pt) => p.toTuple)
   }
 
-  def inRange(from: Id, to: Id): Boolean =
-    entities.get(from).pos.adjacent(entities.get(to).pos)
+  def inRange(from: Entity, to: Entity): Boolean =
+    from.pos.adjacent(to.pos)
 
-  def dists(pos: Pt, dests: Iterable[Pt]): Map[Pt, Int] =
-    Search.bfs(allOpenNbrs, Queue((pos, 0)), dests.toSet, Set(), Map())
+  def dists(pos: Pt, dests: Iterable[Pt]): Map[Pt, Int] = {
+    Console.println(s"finding distances from $pos to ${dests.size} positions")
+    val dists =
+      Search.bfs(allOpenNbrs, Queue((pos, 0)), dests.toSet, Set(pos), Map())
+    Console.println("done")
+    dists
+  }
 
-  def chooseDestination(id: Id, dests: Iterable[Pt]): Destination = {
-    val entity = entities.get(id)
+  def chooseDestination(entity: Entity, dests: Iterable[Pt]): Destination = {
     dists(entity.pos, dests).toVector
       .sortBy(e => (e._2, e._1.toTuple))
       .map(e => Dest(e._1, e._2))
@@ -255,15 +262,21 @@ case class Game(
       .getOrElse(NoneReachable)
   }
 
-  def destination(id: Id): Destination = {
-    val targets = this.targets(id)
+  def destination(entity: Entity): Destination = {
+    val targets = this.targets(entity)
+    // Console.println(s"${entity.id} has ${targets.size} targets")
     if (targets.isEmpty) NoTargets
-    else if (targets.find(target => inRange(id, target)).isDefined) Stay
-    else chooseDestination(id, candidateDestinations(targets))
+    else if (targets.find(target => inRange(entity, target)).isDefined) Stay
+    else chooseDestination(entity, candidateDestinations(targets))
   }
 
-  def paths(from: Pt, to: Pt, pathLength: Int): Iterable[Search.Path] =
-    Search.dfs(allOpenNbrs, from, to, pathLength, Set(), List(), List())
+  def paths(from: Pt, to: Pt, pathLength: Int): Iterable[Search.Path] = {
+    Console.println(s"finding paths of length $pathLength from $from to $to")
+    val paths =
+      Search.dfs(allOpenNbrs, from, to, pathLength, Set(), List(), List())
+    Console.println("done")
+    paths
+  }
 
   def step(from: Pt, to: Pt, pathLength: Int): Pt =
     paths(from, to, pathLength)
@@ -272,39 +285,46 @@ case class Game(
       .sortBy(pt => pt.toTuple)
       .head
 
-  def chooseTarget(id: Id): Option[Id] = {
-    val entity = entities.get(id)
+  def chooseTarget(entity: Entity): Option[Entity] =
     entity.pos.nbrs
       .flatMap(entities.find)
       .filter(_.typ != entity.typ)
       .toVector
       .sortBy(e => (e.hp, e.pos.toTuple))
       .headOption
-      .map(_.id)
-  }
 
-  def move(id: Id): Result =
-    destination(id) match {
+  def move(id: Id): Result = {
+    val entity = entities.get(id)
+    val dest = destination(entity)
+    // Console.println(s"$id wants to go to $dest")
+    dest match {
       case NoTargets     => Finished(this)
       case NoneReachable => Continue(this)
       case Stay          => Continue(this)
       case Dest(pos, dist) => {
-        val to = step(entities.get(id).pos, pos, dist)
+        val to = step(entity.pos, pos, dist)
         Continue(copy(entities = entities.step(id, to)))
       }
     }
+  }
 
   def attack(id: Id): Game = {
+    val entity = entities.get(id)
+    val target = chooseTarget(entity)
+    // Console.println(s"$id wants to attack $target")
     copy(entities =
-      chooseTarget(id)
-        .map(target => entities.attack(id, target))
+      target
+        .map(target => entities.attack(id, target.id))
         .getOrElse(entities)
     )
   }
 
-  def takeTurn(id: Id): Result = move(id) match {
-    case Continue(game) => Continue(game.attack(id))
-    case finished       => finished
+  def takeTurn(id: Id): Result = {
+    // Console.println(s"turn: $id")
+    move(id) match {
+      case Continue(game) => Continue(game.attack(id))
+      case finished       => finished
+    }
   }
 
   def playRound: Result = {
@@ -312,30 +332,28 @@ case class Game(
     turnOrder.foldLeft(initial) { (game, id) =>
       game match {
         case Continue(game) =>
-          if (game.entities.has(id)) game.takeTurn(id) else Continue(game)
+          if (game.entities.has(id)) game.takeTurn(id)
+          else Continue(game)
         case Finished(_) => game
       }
     }
   }
 
-  def hitPoints: Int = entities.hp.values.sum
-
   def play: (Game, Int) = {
-    def play(game: Game, round: Int): (Game, Int) =
+    def play(game: Game, round: Int): (Game, Int) = {
+      Console.println(s"round $round")
       game.playRound match {
         case Continue(game) => play(game, round + 1)
         case Finished(game) => (game, round)
       }
+    }
     play(this, 0)
   }
 
-  def results = {
+  def result = {
     val (game, round) = play
-    val hp = game.hitPoints
-    (game, round, hp, round * hp)
+    round * game.entities.hp.values.sum
   }
-
-  def result = results._4
 }
 
 object Game {
@@ -362,6 +380,6 @@ object Year2018Day15 {
   }
 
   def main(args: Array[String]): Unit = {
-    println(Game.fromGrid(read(args(0)).get))
+    println(Game.fromGrid(read(args(0)).get).result)
   }
 }

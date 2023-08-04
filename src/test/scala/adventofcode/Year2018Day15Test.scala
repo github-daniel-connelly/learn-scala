@@ -55,13 +55,13 @@ class Year2018Day15Test extends AnyFunSuite {
   test("game.targets") {
     val game = parseGame("#.EG\nG.E#\n")
     val elf2 = game.entities.find(Pt(1, 2)).get
-    val targetsForElf = game.targets(elf2.id)
+    val targetsForElf = game.targets(elf2)
     val goblin1 = game.entities.find(Pt(0, 3)).get
-    val targetsForGoblin = game.targets(goblin1.id)
+    val targetsForGoblin = game.targets(goblin1)
     val elves = game.entities.iterator.filter(e => e.typ == Elf)
     val goblins = game.entities.iterator.filter(e => e.typ == Goblin)
-    assert(targetsForGoblin == elves.toVector.sortBy(_.pos.toTuple).map(_.id))
-    assert(targetsForElf == goblins.toVector.sortBy(_.pos.toTuple).map(_.id))
+    assert(targetsForGoblin == elves.toVector.sortBy(_.pos.toTuple))
+    assert(targetsForElf == goblins.toVector.sortBy(_.pos.toTuple))
   }
 
   test("game.inRange") {
@@ -69,21 +69,21 @@ class Year2018Day15Test extends AnyFunSuite {
 
     val goblin2 = game.entities.find(Pt(1, 0)).get
     val inRangeOfGoblin2 =
-      game.entities.ids.filter(e => game.inRange(goblin2.id, e)).toVector
+      game.entities.iterator.filter(e => game.inRange(goblin2, e)).toVector
     assert(inRangeOfGoblin2.isEmpty)
 
     val elf1 = game.entities.find(Pt(0, 2)).get
     val inRangeOfElf1 =
-      game.entities.ids.filter(e => game.inRange(elf1.id, e)).toVector
+      game.entities.iterator.filter(e => game.inRange(elf1, e)).toVector
     val expected =
       Vector(game.entities.find(Pt(0, 3)).get, game.entities.find(Pt(1, 2)).get)
-    assert(inRangeOfElf1 == expected.map(_.id))
+    assert(inRangeOfElf1 == expected)
   }
 
   test("game.candidateDestinations") {
     val game = parseGame("#..E\nG.E#\n")
     val goblin = game.entities.find(Pt(1, 0)).get
-    val dests = game.candidateDestinations(game.targets(goblin.id))
+    val dests = game.candidateDestinations(game.targets(goblin))
     val expected = Vector(Pt(0, 2), Pt(1, 1))
     assert(dests == expected)
   }
@@ -99,16 +99,18 @@ class Year2018Day15Test extends AnyFunSuite {
       #######""")
     val goblin = game.entities.find(Pt(2, 5)).get
     val elf = game.entities.find(Pt(4, 5)).get
-    assert(game.dists(goblin.pos, Vector(Pt(5, 5)))(Pt(5, 5)) == 11)
+    assert(
+      game.dists(goblin.pos, Vector(Pt(5, 5)))(Pt(5, 5)) == 11
+    )
   }
 
   test("game.destination") {
     val game = parseGame("#######\n#E..G.#\n#...#.#\n#.G.#G#\n#######\n")
     val elf = game.entities.find(Pt(1, 1)).get
 
-    val targets = game.targets(elf.id)
+    val targets = game.targets(elf)
     val expectedTargets =
-      Seq(Pt(1, 4), Pt(3, 2), Pt(3, 5)).map(p => game.entities.find(p).get.id)
+      Seq(Pt(1, 4), Pt(3, 2), Pt(3, 5)).map(p => game.entities.find(p).get)
     assert(targets == expectedTargets)
 
     val destinations = game.candidateDestinations(targets)
@@ -131,7 +133,7 @@ class Year2018Day15Test extends AnyFunSuite {
     )
     assert(dists == expectedDists)
 
-    val Dest(pos, dist) = game.destination(elf.id).asInstanceOf[Dest]
+    val Dest(pos, dist) = game.destination(elf).asInstanceOf[Dest]
     assert(pos == Pt(1, 3))
     assert(dist == 2)
   }
@@ -139,19 +141,25 @@ class Year2018Day15Test extends AnyFunSuite {
   test("game.destination.notargets") {
     val game = parseGame("##E#\nE.##\n")
     val elf1 = game.entities.find(Pt(0, 2)).get
-    assert(game.destination(elf1.id) == NoTargets)
+    assert(game.destination(elf1) == NoTargets)
   }
 
   test("game.destination.none") {
     val game = parseGame("##E#\nG.##\n")
     val elf1 = game.entities.find(Pt(0, 2)).get
-    assert(game.destination(elf1.id) == NoneReachable)
+    assert(game.destination(elf1) == NoneReachable)
   }
 
   test("game.paths") {
-    val game = parseGame("#######\n#.E...#\n#.....#\n#...G.#\n#######")
+    val game = parseGame("""
+      #######
+      #.E...#
+      #.....#
+      #...G.#
+      #######
+      """)
     val elf = game.entities.find(Pt(1, 2)).get
-    val Dest(dst, dist) = game.destination(elf.id).asInstanceOf[Dest]
+    val Dest(dst, dist) = game.destination(elf).asInstanceOf[Dest]
     assert(dst == Pt(2, 4))
     assert(dist == 3)
     val paths = game.paths(elf.pos, dst, dist)
@@ -178,8 +186,8 @@ class Year2018Day15Test extends AnyFunSuite {
         .update(start.entities.find(Pt(3, 2)).get.copy(hp = 2))
     )
     val elf = game.entities.find(Pt(2, 2)).get
-    val target = game.chooseTarget(elf.id).get
-    assert(target == game.entities.find(Pt(2, 3)).get.id)
+    val target = game.chooseTarget(elf).get
+    assert(target == game.entities.find(Pt(2, 3)).get)
   }
 
   test("game.chooseTarget.none") {
@@ -190,7 +198,7 @@ class Year2018Day15Test extends AnyFunSuite {
       ..G..
       ...G.""")
     val goblin = game.entities.find(Pt(0, 0)).get
-    val target = game.chooseTarget(goblin.id)
+    val target = game.chooseTarget(goblin)
     assert(target.isEmpty)
   }
 

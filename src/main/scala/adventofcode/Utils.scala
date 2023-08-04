@@ -12,7 +12,7 @@ object Utils {
     def toTuple: (Int, Int) = (row, col)
     def adjacent(that: Pt): Boolean =
       (row - that.row).abs + (col - that.col).abs == 1
-    def nbrs: Seq[Pt] = Seq(
+    def nbrs: List[Pt] = List(
       Pt(row - 1, col),
       Pt(row + 1, col),
       Pt(row, col - 1),
