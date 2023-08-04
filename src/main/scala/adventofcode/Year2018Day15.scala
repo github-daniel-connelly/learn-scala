@@ -36,12 +36,6 @@ case class Grid(data: Vector[Vector[Tile]]) {
   override def toString(): String = {
     data.map(row => row.map(_.ch).mkString).mkString("\n")
   }
-
-  override def equals(that: Any): Boolean = that match {
-    case that: Grid if that.data.length != data.length => false
-    case that: Grid => that.data.zip(data).forall(p => p._1.sameElements(p._2))
-    case _          => false
-  }
 }
 
 object Grid {
@@ -52,76 +46,94 @@ object Grid {
 }
 
 // ============================================================================
-// game representation
+// entities
 
-case class Entity(typ: EntityType, pos: Pt, hp: Int = 200, ap: Int = 3) {
-  def inRange(target: Entity): Boolean = pos.adjacent(target.pos)
+case class Id(id: Int)
+
+case class Entity(id: Id, typ: EntityType, pos: Pt, hp: Int, ap: Int)
+
+case class Entities(
+    typ: Map[Id, EntityType],
+    pos: Map[Id, Pt],
+    byPos: Map[Pt, Id],
+    hp: Map[Id, Int],
+    ap: Map[Id, Int]
+) {
+  def add(id: Id, typ: EntityType, pos: Pt, hp: Int = 200, ap: Int = 3) =
+    new Entities(
+      this.typ.updated(id, typ),
+      this.pos.updated(id, pos),
+      this.byPos.updated(pos, id),
+      this.hp.updated(id, hp),
+      this.ap.updated(id, ap)
+    )
+
+  def remove(id: Id): Entities = {
+    val pt = pos(id)
+    new Entities(
+      typ.removed(id),
+      pos.removed(id),
+      byPos.removed(pt),
+      hp.removed(id),
+      ap.removed(id)
+    )
+  }
+
+  def has(id: Id): Boolean = typ.contains(id)
+  def get(id: Id): Entity = Entity(id, typ(id), pos(id), hp(id), ap(id))
+  def find(pos: Pt): Option[Entity] = byPos.get(pos).map(get)
+  def ids: Iterator[Id] = typ.keysIterator
+  def iterator: Iterator[Entity] = ids.map(get)
+  def toVector: Vector[Entity] = iterator.toVector
+
+  def step(id: Id, to: Pt): Entities = {
+    val pt = pos(id)
+    new Entities(
+      typ,
+      pos.updated(id, to),
+      byPos.removed(pt).updated(to, id),
+      hp,
+      ap
+    )
+  }
+
+  def attack(from: Id, to: Id): Entities = {
+    val toHp = hp(to) - ap(from)
+    if (toHp <= 0) remove(to)
+    else new Entities(typ, pos, byPos, hp.updated(to, toHp), ap)
+  }
+
+  def update(entity: Entity): Entities = {
+    remove(entity.id).add(
+      entity.id,
+      entity.typ,
+      entity.pos,
+      entity.hp,
+      entity.ap
+    )
+  }
 }
 
-sealed trait Destination
-case object Stay extends Destination
-case object NoTargets extends Destination
-case object NoneReachable extends Destination
-case class Dest(pos: Pt, dist: Int) extends Destination
+object Entities {
+  val empty = new Entities(Map(), Map(), Map(), Map(), Map())
 
-// TODO: split this up
-// TODO: add better language for mutations
-case class Game(
-    val map: Map[Pt, MapTile],
-    val entities: Map[Pt, Entity],
-    val height: Int,
-    val width: Int
-) {
-  def toGrid: Grid = {
-    // later values clobber earlier, so entities overwrite floors
-    // invariant: at no point are entities standing on walls
-    val byPos = map ++ entities.map(p => (p._1, p._2.typ))
-    val data: Vector[Vector[Tile]] = Vector.fill(height, width)(Floor)
-    Grid(byPos.foldLeft(data) { (acc, e) =>
-      val (Pt(r, c), t) = e
-      acc.updated(r, acc(r).updated(c, t))
-    })
+  def fromGrid(grid: Grid): Entities = {
+    flatten(grid.data).zipWithIndex.foldLeft(empty) { (em, pair) =>
+      pair match {
+        case ((pos, Elf), i)    => em.add(Id(i), Elf, pos)
+        case ((pos, Goblin), i) => em.add(Id(i), Goblin, pos)
+        case _                  => em
+      }
+    }
   }
+}
 
-  override def toString: String = {
-    ("" +: entities.values
-      .foldLeft(toGrid.toString.linesIterator.toVector) { (lines, entity) =>
-        {
-          val line = lines(entity.pos.row) + s" ${entity.typ.ch}(${entity.hp})"
-          lines.updated(entity.pos.row, line)
-        }
-      })
-      .mkString("\n")
-  }
+// ============================================================================
+// algorithms
 
-  override def equals(that: Any): Boolean = that match {
-    case that: Game =>
-      that.map == map && that.entities == entities &&
-      that.height == height && that.width == width
-    case _ => false
-  }
-
-  def turnOrder: Iterable[Entity] =
-    entities.values.toVector.sortBy(e => (e.pos.row, e.pos.col))
-
-  def targets(forEntity: Entity): Iterable[Entity] =
-    entities.values.toVector
-      .filter(_.typ != forEntity.typ)
-      .sortBy(_.pos.toTuple)
-
-  def openNbrs(pt: Pt): Iterable[Pt] = pt.nbrs
-    .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
-    .filterNot(entities.contains)
-    .filter(p => map.getOrElse(p, Floor) == Floor)
-
-  def candidateDestinations(forTargets: Iterable[Entity]): Iterable[Pt] =
-    forTargets
-      .flatMap(e => openNbrs(e.pos))
-      .toSet
-      .toVector
-      .sortBy((p: Pt) => p.toTuple)
-
+object Search {
   def bfs(
+      openNbrs: Map[Pt, Iterable[Pt]],
       q: Queue[(Pt, Int)],
       dests: Set[Pt],
       v: Set[Pt],
@@ -131,32 +143,14 @@ case class Game(
       case (p, d) +: tail => {
         val nbrs = openNbrs(p).filterNot(v.contains).map(p => (p, d + 1))
         val nextDists = if (dests.contains(p)) dists.updated(p, d) else dists
-        bfs(tail ++ nbrs, dests, v.incl(p), nextDists)
+        bfs(openNbrs, tail ++ nbrs, dests, v.incl(p), nextDists)
       }
       case _ => dists
     }
 
-  def dists(from: Pt, to: Set[Pt]): Map[Pt, Int] =
-    bfs(Queue((from, 0)), to, Set(), Map())
-
-  def destination(entity: Entity): Destination = {
-    // TODO: refactor
-    val targets = this.targets(entity)
-    if (targets.isEmpty) NoTargets
-    if (targets.find(entity.inRange).isDefined) Stay
-    else {
-      val allDists = dists(entity.pos, candidateDestinations(targets).toSet)
-      if (allDists.isEmpty) NoneReachable
-      else {
-        val (dest, dist) =
-          allDists.toVector.sortBy(e => (e._2, e._1.toTuple)).head
-        Dest(dest, dist)
-      }
-    }
-  }
-
   type Path = List[Pt]
   def dfs(
+      openNbrs: Map[Pt, Iterable[Pt]],
       cur: Pt,
       dst: Pt,
       dist: Int,
@@ -168,58 +162,180 @@ case class Game(
     else if (path.length >= dist) acc
     else {
       val nbrs = openNbrs(cur).filterNot(v.contains)
-      nbrs.flatMap(nbr => dfs(nbr, dst, dist, v.incl(cur), path :+ nbr, acc))
+      nbrs.flatMap(nbr =>
+        dfs(openNbrs, nbr, dst, dist, v.incl(cur), path :+ nbr, acc)
+      )
     }
+}
 
-  def paths(from: Pt, to: Pt, dist: Int): Iterable[Path] =
-    dfs(from, to, dist, Set(), List(), List())
+// ============================================================================
+// game logic
 
-  def step(from: Pt, to: Pt, pathLength: Int): Option[Pt] =
+sealed trait Destination
+case object Stay extends Destination
+case object NoTargets extends Destination
+case object NoneReachable extends Destination
+case class Dest(pos: Pt, dist: Int) extends Destination
+
+sealed trait Result {
+  def game: Game
+  def get: Game = this match {
+    case Continue(game) => game
+    case Finished(game) => throw new IllegalStateException("game is over!")
+  }
+}
+case class Continue(game: Game) extends Result
+case class Finished(game: Game) extends Result
+
+case class Game(
+    map: Map[Pt, MapTile],
+    entities: Entities,
+    height: Int,
+    width: Int
+) {
+  def toGrid: Grid = {
+    // later values clobber earlier, so entities overwrite floors
+    val byPos = map ++ entities.iterator.map(e => (e.pos, e.typ))
+    val data: Vector[Vector[Tile]] = Vector.fill(height, width)(Floor)
+    Grid(byPos.foldLeft(data) { (acc, e) =>
+      val (Pt(r, c), t) = e
+      acc.updated(r, acc(r).updated(c, t))
+    })
+  }
+
+  override def toString: String = {
+    entities.iterator
+      .foldLeft(toGrid.toString().linesIterator.toSeq) { (lines, e) =>
+        lines.updated(e.pos.row, lines(e.pos.row) + s" ${e.typ.ch}(${e.hp})")
+      }
+      .mkString("\n")
+  }
+
+  def turnOrder: Iterable[Id] =
+    entities.toVector.sortBy(e => e.pos.toTuple).map(_.id)
+
+  def targets(id: Id): Iterable[Id] = {
+    val entity = entities.get(id)
+    entities.toVector
+      .filter(_.typ != entity.typ)
+      .sortBy(_.pos.toTuple)
+      .map(_.id)
+  }
+
+  def openNbrs(pt: Pt): Iterable[Pt] = pt.nbrs
+    .filter(p => p.row >= 0 && p.row < height && p.col >= 0 && p.col < width)
+    .filter(p => entities.find(p).isEmpty)
+    .filter(p => map.getOrElse(p, Floor) == Floor)
+
+  def allOpenNbrs: Map[Pt, Iterable[Pt]] = {
+    map.keys.map(pos => (pos, openNbrs(pos))).toMap
+  }
+
+  def candidateDestinations(forTargets: Iterable[Id]): Iterable[Pt] = {
+    val nbrs = allOpenNbrs
+    forTargets
+      .flatMap(e => nbrs(entities.get(e).pos))
+      .toSet
+      .toVector
+      .sortBy((p: Pt) => p.toTuple)
+  }
+
+  def inRange(from: Id, to: Id): Boolean =
+    entities.get(from).pos.adjacent(entities.get(to).pos)
+
+  def dists(pos: Pt, dests: Iterable[Pt]): Map[Pt, Int] =
+    Search.bfs(allOpenNbrs, Queue((pos, 0)), dests.toSet, Set(), Map())
+
+  def chooseDestination(id: Id, dests: Iterable[Pt]): Destination = {
+    val entity = entities.get(id)
+    dists(entity.pos, dests).toVector
+      .sortBy(e => (e._2, e._1.toTuple))
+      .map(e => Dest(e._1, e._2))
+      .headOption
+      .getOrElse(NoneReachable)
+  }
+
+  def destination(id: Id): Destination = {
+    val targets = this.targets(id)
+    if (targets.isEmpty) NoTargets
+    else if (targets.find(target => inRange(id, target)).isDefined) Stay
+    else chooseDestination(id, candidateDestinations(targets))
+  }
+
+  def paths(from: Pt, to: Pt, pathLength: Int): Iterable[Search.Path] =
+    Search.dfs(allOpenNbrs, from, to, pathLength, Set(), List(), List())
+
+  def step(from: Pt, to: Pt, pathLength: Int): Pt =
     paths(from, to, pathLength)
       .flatMap(path => path.headOption)
       .toVector
-      .sortBy(p => p.toTuple)
-      .headOption
+      .sortBy(pt => pt.toTuple)
+      .head
 
-  def applyStep(entity: Entity, step: Pt): (Game, Entity) = {
-    val entity2 = entity.copy(pos = step)
-    val game2 =
-      copy(entities = entities.removed(entity.pos).updated(step, entity2))
-    (game2, entity2)
-  }
-
-  def chooseTarget(entity: Entity): Option[Entity] =
+  def chooseTarget(id: Id): Option[Id] = {
+    val entity = entities.get(id)
     entity.pos.nbrs
-      .flatMap(entities.get)
+      .flatMap(entities.find)
       .filter(_.typ != entity.typ)
       .toVector
       .sortBy(e => (e.hp, e.pos.toTuple))
       .headOption
-
-  def attack(from: Entity, to: Entity): Game = {
-    val updated = to.copy(hp = to.hp - from.ap)
-    val updatedEntities =
-      if (updated.hp <= 0) entities.removed(updated.pos)
-      else entities.updated(updated.pos, updated)
-    copy(entities = updatedEntities)
+      .map(_.id)
   }
 
-  def takeTurn(entity: Entity): Option[Game] = {
-    // TODO: no
-    (destination(entity) match {
-      case NoTargets     => None
-      case NoneReachable => Some((this, entity))
-      case Stay          => Some((this, entity))
-      case Dest(p, d)    => Some(applyStep(entity, step(entity.pos, p, d).get))
-    }).flatMap(pair =>
-      pair._1
-        .chooseTarget(pair._2)
-        .map(target => pair._1.attack(pair._2, target))
+  def move(id: Id): Result =
+    destination(id) match {
+      case NoTargets     => Finished(this)
+      case NoneReachable => Continue(this)
+      case Stay          => Continue(this)
+      case Dest(pos, dist) => {
+        val to = step(entities.get(id).pos, pos, dist)
+        Continue(copy(entities = entities.step(id, to)))
+      }
+    }
+
+  def attack(id: Id): Game = {
+    copy(entities =
+      chooseTarget(id)
+        .map(target => entities.attack(id, target))
+        .getOrElse(entities)
     )
   }
 
-  // TODO: add back IDs
-  def playRound: Option[Game] = ???
+  def takeTurn(id: Id): Result = move(id) match {
+    case Continue(game) => Continue(game.attack(id))
+    case finished       => finished
+  }
+
+  def playRound: Result = {
+    val initial: Result = Continue(this)
+    turnOrder.foldLeft(initial) { (game, id) =>
+      game match {
+        case Continue(game) =>
+          if (game.entities.has(id)) game.takeTurn(id) else Continue(game)
+        case Finished(_) => game
+      }
+    }
+  }
+
+  def hitPoints: Int = entities.hp.values.sum
+
+  def play: (Game, Int) = {
+    def play(game: Game, round: Int): (Game, Int) =
+      game.playRound match {
+        case Continue(game) => play(game, round + 1)
+        case Finished(game) => (game, round)
+      }
+    play(this, 0)
+  }
+
+  def results = {
+    val (game, round) = play
+    val hp = game.hitPoints
+    (game, round, hp, round * hp)
+  }
+
+  def result = results._4
 }
 
 object Game {
@@ -228,12 +344,8 @@ object Game {
     val map = tiles.collect {
       case (pt, Wall) => (pt, Wall)
       case (pt, _)    => (pt, Floor)
-    }
-    val entities = tiles.collect {
-      case (pt, Elf)    => (pt, Entity(Elf, pt))
-      case (pt, Goblin) => (pt, Entity(Goblin, pt))
-    }
-    new Game(map.toMap, entities.toMap, grid.data.size, grid.data(0).size)
+    }.toMap
+    Game(map, Entities.fromGrid(grid), grid.data.size, grid.data(0).size)
   }
 }
 
@@ -250,6 +362,6 @@ object Year2018Day15 {
   }
 
   def main(args: Array[String]): Unit = {
-    println(Game.fromGrid(read(args(0)).get).toGrid)
+    println(Game.fromGrid(read(args(0)).get))
   }
 }
