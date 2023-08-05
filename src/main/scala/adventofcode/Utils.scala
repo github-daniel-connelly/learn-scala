@@ -21,7 +21,7 @@ object Utils {
     )
   }
 
-  def flatten[T](grid: Seq[Seq[T]]): Seq[(Pt, T)] =
+  def flatten[T](grid: Seq[Seq[T]]): Iterable[(Pt, T)] =
     for {
       (row, r) <- grid.zipWithIndex
       (t, c) <- row.zipWithIndex
