@@ -275,11 +275,11 @@ class Year2018Day15Test extends AnyFunSuite {
 
   test("game.takeTurn") {
     var start = parseGame("""
-G....
-G.G..
-.E.G.
-.....
-...G.""")
+      G....
+      G.G..
+      .E.G.
+      .....
+      ...G.""")
 
     val elf = start.entities.find(Pt(2, 1)).get
     val goblin1 = start.entities.find(Pt(1, 0)).get.copy(hp = 4)

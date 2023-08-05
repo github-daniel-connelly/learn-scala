@@ -64,7 +64,13 @@ case class Continue[T](value: T) extends Result[T]
 case class Finished[T](value: T) extends Result[T]
 
 // ============================================================================
-// entity
+// entity logic
+
+sealed trait Destination
+case object Stay extends Destination
+case object NoTargets extends Destination
+case object NoneReachable extends Destination
+case class Dest(pos: Pt, dist: Int) extends Destination
 
 case class Id(id: Int)
 
@@ -92,22 +98,6 @@ case class Entity(id: Id, typ: EntityType, pos: Pt, hp: Int, ap: Int) {
       .headOption
       .map(target => entities.attack(id, target.id))
       .getOrElse(entities)
-}
-
-object Entity {
-  // put this here so we don't accidentally use this-bound data
-  def takeTurn(
-      id: Id,
-      entities: Entities,
-      nbrs: Map[Pt, Iterable[Pt]]
-  ): Result[Entities] =
-    // TODO: Entities.get should return an Option
-    if (!entities.has(id)) Continue(entities)
-    else
-      entities.get(id).move(entities, nbrs) match {
-        case Continue(moved) => Continue(moved.get(id).attack(moved))
-        case Finished(moved) => Finished(moved)
-      }
 }
 
 class MovingEntity(
@@ -152,6 +142,22 @@ class MovingEntity(
       Search.dists(from, List(to), nbrs).get(to).getOrElse(-1) == len
     nbrs(pos).find(nbr => hasDist(nbr, dest, pathLength - 1)).head
   }
+}
+
+object Entity {
+  // put this here so we don't accidentally use this-bound data
+  def takeTurn(
+      id: Id,
+      entities: Entities,
+      nbrs: Map[Pt, Iterable[Pt]]
+  ): Result[Entities] =
+    // TODO: Entities.get should return an Option
+    if (!entities.has(id)) Continue(entities)
+    else
+      entities.get(id).move(entities, nbrs) match {
+        case Continue(moved) => Continue(moved.get(id).attack(moved))
+        case Finished(moved) => Finished(moved)
+      }
 }
 
 // ============================================================================
@@ -262,12 +268,6 @@ object Search {
 // ============================================================================
 // game logic
 
-sealed trait Destination
-case object Stay extends Destination
-case object NoTargets extends Destination
-case object NoneReachable extends Destination
-case class Dest(pos: Pt, dist: Int) extends Destination
-
 case class Game(
     map: Map[Pt, MapTile],
     entities: Entities,
@@ -333,15 +333,15 @@ object Game {
 // play the game
 
 object Year2018Day15 {
-  def read(path: String): Try[Grid] = {
+  def read(path: String): Try[Game] = {
     for {
       f <- Try(Source.fromFile(path))
       g <- Grid.parse(f)
       _ <- Try(f.close())
-    } yield g
+    } yield Game.fromGrid(g)
   }
 
   def main(args: Array[String]): Unit = {
-    println(Game.fromGrid(read(args(0)).get).play)
+    println(read(args(0)).get.play)
   }
 }
