@@ -1,6 +1,6 @@
 package adventofcode
 
-object Year21Day16 {
+object Year2021Day16 {
   def main(args: Array[String]): Unit =
     println("Hello, world")
 }
