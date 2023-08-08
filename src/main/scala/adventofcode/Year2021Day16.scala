@@ -104,6 +104,22 @@ object Year2021Day16 {
     case Operator(version, _, ops) => version + ops.map(sumVersions).sum
   }
 
+  def evaluate(packet: Packet): Int = packet match {
+    case Literal(version, lit) => lit
+    case Operator(version, typ, operands) => {
+      val ops = operands.map(evaluate)
+      typ match {
+        case 0 => ops.sum
+        case 1 => ops.reduce((a, b) => a * b)
+        case 2 => ops.min
+        case 3 => ops.max
+        case 5 => ops.reduce((a, b) => if (a > b) 1 else 0)
+        case 6 => ops.reduce((a, b) => if (a < b) 1 else 0)
+        case 7 => ops.reduce((a, b) => if (a == b) 1 else 0)
+      }
+    }
+  }
+
   def main(args: Array[String]): Unit = {
     val packet = parse(decode(Source.fromFile(args(0))).get).get
     println(sumVersions(packet))
