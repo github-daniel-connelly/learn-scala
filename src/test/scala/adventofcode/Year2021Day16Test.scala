@@ -39,4 +39,25 @@ class Year2021Day16Test extends AnyFunSuite {
   test("parse.literal") {
     assert(parse("D2FE28").get == Literal(6, 2021))
   }
+
+  test("parse.operator.totalLength") {
+    assert(
+      parse("38006F45291200").get ==
+        Operator(1, 6, Vector(Literal(6, 10), Literal(2, 20)))
+    )
+  }
+
+  test("parse.operator.numPackets") {
+    assert(
+      parse("EE00D40C823060").get ==
+        Operator(7, 3, Vector(Literal(2, 1), Literal(4, 2), Literal(1, 3)))
+    )
+  }
+
+  test("sumVersions") {
+    assert(sumVersions(parse("8A004A801A8002F478").get) == 16)
+    assert(sumVersions(parse("620080001611562C8802118E34").get) == 12)
+    assert(sumVersions(parse("C0015000016115A2E0802F182340").get) == 23)
+    assert(sumVersions(parse("A0016C880162017C3686B18A3D4780").get) == 31)
+  }
 }
