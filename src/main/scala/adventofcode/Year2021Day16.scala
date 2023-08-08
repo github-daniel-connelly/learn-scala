@@ -3,29 +3,10 @@ package adventofcode
 import scala.io.Source
 import scala.util.{Try, Success, Failure}
 
-sealed abstract class Packet(val version: Long, val typ: Long)
-case class Literal(override val version: Long, lit: Long)
-    extends Packet(version, 4) {
-  override def toString = s"$lit"
-}
-case class Operator(
-    override val version: Long,
-    override val typ: Long,
-    operands: Seq[Packet]
-) extends Packet(version, typ) {
-  override def toString: String = {
-    val op = typ match {
-      case 0 => "+"
-      case 1 => "*"
-      case 2 => "min"
-      case 3 => "max"
-      case 5 => ">"
-      case 6 => "<"
-      case 7 => "="
-    }
-    s"($op ${operands.map(_.toString).mkString(" ")})"
-  }
-}
+sealed trait Packet
+case class Literal(version: Long, typ: Long) extends Packet
+case class Operator(version: Long, typ: Long, operands: Seq[Packet])
+    extends Packet
 
 object Year2021Day16 {
   type Bit = Byte
