@@ -23,14 +23,25 @@ object Year2021Day16 {
     (Literal(version, int), b.drop(5 * (prefix.length + suffix.length)))
   }
 
-  private def parsePackets(b: Seq[Bit]): Try[Seq[Packet]] = {
-    if (b.length == 0) Success(Seq.empty)
+  private def parsePackets(
+      b: Seq[Bit],
+      len: Long
+  ): Try[(Seq[Packet], Seq[Bit])] = {
+    if (len == 0) Success((Seq.empty, b))
     else
       for {
         (packet, remaining) <- parsePacket(b)
-        packets <- parsePackets(remaining)
-      } yield packet +: packets
+        (packets, remaining) <- parsePackets(
+          remaining, {
+            val parsed = b.length - remaining.length
+            len - parsed
+          }
+        )
+      } yield (packet +: packets, remaining)
   }
+
+  private def parsePackets(b: Seq[Bit]): Try[(Seq[Packet], Seq[Bit])] =
+    parsePackets(b.drop(15), decodeInt(b.take(15)))
 
   private def parsePacketsN(
       b: Seq[Bit],
@@ -44,23 +55,19 @@ object Year2021Day16 {
       } yield (packet +: packets, remaining)
   }
 
+  private def parsePacketsN(b: Seq[Bit]): Try[(Seq[Packet], Seq[Bit])] = {
+    parsePacketsN(b.drop(11), decodeInt(b.take(11)))
+  }
+
   private def parseOperator(
       version: Long,
       typ: Long,
       b: Seq[Bit]
-  ): Try[(Packet, Seq[Bit])] = Try {
-    // TODO: cleanup
-    val nlen = if (b.head == 0) 15 else 11
-    val n = decodeInt(b.drop(1).take(nlen))
-    val afterN = b.drop(nlen + 1)
+  ): Try[(Packet, Seq[Bit])] = {
     val result =
-      if (b.head == 0)
-        parsePackets(afterN.take(n.toInt)).map(ops =>
-          (ops, afterN.drop(n.toInt))
-        )
-      else parsePacketsN(afterN, n)
-    val (ops, remaining) = result.get
-    (Operator(version, typ, ops), remaining)
+      if (b.head == 0) parsePackets(b.drop(1))
+      else parsePacketsN(b.drop(1))
+    result.map(pair => (Operator(version, typ, pair._1), pair._2))
   }
 
   private def parseHeader(b: Seq[Bit]): Try[(Long, Long, Seq[Bit])] = Try {
