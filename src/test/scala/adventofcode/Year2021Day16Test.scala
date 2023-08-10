@@ -37,20 +37,37 @@ class Year2021Day16Test extends AnyFunSuite {
   }
 
   test("parse.literal") {
-    assert(parse("D2FE28").get == Literal(6, 2021))
+    assert(parse("D2FE28").get == Packet(Header(6, 4), Literal(2021)))
   }
 
   test("parse.operator.totalLength") {
     assert(
       parse("38006F45291200").get ==
-        Operator(1, 6, Vector(Literal(6, 10), Literal(2, 20)))
+        Packet(
+          Header(1, 6),
+          Operator(
+            Vector(
+              Packet(Header(6, 4), Literal(10)),
+              Packet(Header(2, 4), Literal(20))
+            )
+          )
+        )
     )
   }
 
   test("parse.operator.numPackets") {
     assert(
       parse("EE00D40C823060").get ==
-        Operator(7, 3, Vector(Literal(2, 1), Literal(4, 2), Literal(1, 3)))
+        Packet(
+          Header(7, 3),
+          Operator(
+            Vector(
+              Packet(Header(2, 4), Literal(1)),
+              Packet(Header(4, 4), Literal(2)),
+              Packet(Header(1, 4), Literal(3))
+            )
+          )
+        )
     )
   }
 
