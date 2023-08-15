@@ -1,36 +1,22 @@
 package dns
 
+import dns.Serialization._
 import scala.collection.immutable.ArraySeq
+import scala.util.Random
 
-object Query {
-  // Serializer type class
-  trait Serializer[T] {
-    def serialize(t: T): ArraySeq[Byte]
-  }
+// DNS query model types
+case class Header(
+    id: Short,
+    flags: Short,
+    numQuestions: Short,
+    numAnswers: Short,
+    numAuthorities: Short,
+    numAdditionals: Short
+)
 
-  // Extend types in the type class with a |serialize| method
-  implicit class SerializerOps[T](value: T) {
-    def serialize(implicit serializer: Serializer[T]): ArraySeq[Byte] =
-      serializer.serialize(value)
-  }
-
-  // DNS query model types
-  case class Header(
-      id: Short,
-      flags: Short,
-      numQuestions: Short,
-      numAnswers: Short,
-      numAuthorities: Short,
-      numAdditionals: Short
-  )
-
-  case class Question(name: String, typ: Short, cls: Short)
-
-  // Type class implementations for byte, short, Header, and Question
-
-  implicit object ShortSerializer extends Serializer[Short] {
-    def serialize(x: Short): ArraySeq[Byte] =
-      ArraySeq(x >>> 8, x & 255).map(_.toByte)
+object Header {
+  object Flags {
+    val RecursionDesired: Short = 1 << 8
   }
 
   implicit object HeaderSerializer extends Serializer[Header] {
@@ -43,9 +29,17 @@ object Query {
       header.numAdditionals
     ).flatMap(_.serialize)
   }
+}
 
-  implicit object ByteSerializer extends Serializer[Byte] {
-    def serialize(x: Byte): ArraySeq[Byte] = ArraySeq(x)
+case class Question(name: String, typ: Short, cls: Short)
+
+object Question {
+  object Type {
+    val A: Short = 1
+  }
+
+  object Class {
+    val In: Short = 1
   }
 
   implicit object QuestionSerializer extends Serializer[Question] {
@@ -56,5 +50,22 @@ object Query {
       val segments = ArraySeq.from(question.name.split('.').flatMap(segment))
       segments ++ nul ++ question.typ.serialize ++ question.cls.serialize
     }
+  }
+}
+
+case class Query(header: Header, questions: List[Question])
+
+object Query {
+  def randomID: Short = Random.nextInt(1 << 16).toShort
+
+  def recursive(name: String, typ: Short): Query =
+    Query(
+      Header(randomID, Header.Flags.RecursionDesired, 1, 0, 0, 0),
+      List(Question(name, typ, Question.Class.In))
+    )
+
+  implicit object QuerySerializer extends Serializer[Query] {
+    def serialize(t: Query): ArraySeq[Byte] =
+      t.header.serialize ++ t.questions.flatMap(_.serialize)
   }
 }
