@@ -96,4 +96,15 @@ class QueryTest extends AnyFunSuite {
     )
     assert(query.serialize === expected)
   }
+
+  test("serialize.example") {
+    val q = Query.recursive("www.example.com", Question.Type.A)
+    val r =
+      q.copy(header = q.header.copy(id = Integer.parseInt("3c5f", 16).toShort))
+    val expected =
+      "3c5f0100000100000000000003777777076578616d706c6503636f6d0000010001"
+        .grouped(2)
+        .map(x => Integer.parseInt(x.toString, 16).toByte)
+    assert(r.serialize.toIndexedSeq === expected.toIndexedSeq)
+  }
 }
