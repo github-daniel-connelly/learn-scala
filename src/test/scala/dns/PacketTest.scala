@@ -1,7 +1,7 @@
 package dns
 
 import dns.Packet._
-import dns.Serialization._
+import dns.Encoding._
 import org.scalatest.funsuite.AnyFunSuite
 
 import scala.collection.immutable.ArraySeq
@@ -9,19 +9,24 @@ import scala.collection.immutable.ArraySeq
 class PacketTest extends AnyFunSuite {
   def fromBinary(s: String) = Integer.parseInt(s, 2)
 
-  test("serialize.name") {
+  test("encoding.name") {
     assert(Name("foo").serialize === ArraySeq[Byte](3, 'f', 'o', 'o', 0))
     assert(
       Name("foo.com").serialize === ArraySeq[Byte](3, 'f', 'o', 'o', 3, 'c',
         'o', 'm', 0)
     )
     assert(
-      Name("tls.a.co").serialize == ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2,
+      Name("tls.a.co").serialize === ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2,
         'c', 'o', 0)
+    )
+    assert(
+      deserialize[Name](
+        ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2, 'c', 'o', 0, 7)
+      ).get === (Name("tls.a.co"), ArraySeq[Byte](7))
     )
   }
 
-  test("serialize.header") {
+  test("encoding.header") {
     val header =
       Header(
         fromBinary("10000000001").toShort,
@@ -41,9 +46,11 @@ class PacketTest extends AnyFunSuite {
         0, 3 // numAdditionals
       )
     assert(header.serialize === expected)
+    val result = deserialize[Header](expected ++ ArraySeq[Byte](1, 2, 3)).get
+    assert(result === (header, ArraySeq[Byte](1, 2, 3)))
   }
 
-  test("serialize.question") {
+  test("encoding.question") {
     val question = Question(Name("www.jupiter.com"), 257, 9)
     val expected = ArraySeq[Byte](
       3, // length of www
@@ -57,16 +64,20 @@ class PacketTest extends AnyFunSuite {
       0, 9 // 0x0009 = 9
     )
     assert(question.serialize === expected)
+    val result = deserialize[Question](expected ++ ArraySeq[Byte](0)).get
+    assert(result === (question, ArraySeq[Byte](0)))
   }
 
-  test("serialize.record.empty") {
+  test("encoding.record.empty") {
     val record = Record(Name("server.net"), 7, 1, 1 << 24, ArraySeq.empty)
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
       't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 0)
-    assert(record.serialize == expected)
+    assert(record.serialize === expected)
+    val result = deserialize[Record](expected ++ ArraySeq[Byte](0)).get
+    assert(result === (record, ArraySeq[Byte](0)))
   }
 
-  test("serialize.packet") {
+  test("encoding.packet") {
     val query = Packet(
       Header(
         fromBinary("10000000001").toShort,
@@ -140,9 +151,13 @@ class PacketTest extends AnyFunSuite {
       0, 11, 0, 0, 0, 12, 0, 3, 9, 9, 9
     )
     assert(query.serialize.zipWithIndex === expected.zipWithIndex)
+    assert(
+      Encoding.deserialize[Packet](expected).get ===
+        (query, ArraySeq.empty)
+    )
   }
 
-  test("serialize.recursive") {
+  test("encoding.recursive") {
     val q = Packet.recursive("www.example.com", Question.Type.A)
     val r =
       q.copy(header = q.header.copy(id = Integer.parseInt("3c5f", 16).toShort))

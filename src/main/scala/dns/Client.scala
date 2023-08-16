@@ -1,6 +1,6 @@
 package dns
 
-import dns.Serialization._
+import dns.Encoding._
 
 import scala.concurrent.duration._
 import scala.collection.immutable.ArraySeq
