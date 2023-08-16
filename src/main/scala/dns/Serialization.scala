@@ -12,12 +12,27 @@ object Serialization {
       serializer.serialize(value)
   }
 
+  private def serializeN(
+      x: Long,
+      numBytes: Int,
+      acc: List[Byte] = List.empty
+  ): List[Byte] = {
+    if (numBytes <= 0) acc
+    else serializeN(x >>> 8, numBytes - 1, (x & 255).toByte +: acc)
+  }
+
+  implicit object IntSerializer extends Serializer[Int] {
+    def serialize(x: Int): ArraySeq[Byte] =
+      ArraySeq.from(serializeN(x, 4))
+  }
+
   implicit object ShortSerializer extends Serializer[Short] {
     def serialize(x: Short): ArraySeq[Byte] =
-      ArraySeq(x >>> 8, x & 255).map(_.toByte)
+      ArraySeq.from(serializeN(x, 2))
   }
 
   implicit object ByteSerializer extends Serializer[Byte] {
-    def serialize(x: Byte): ArraySeq[Byte] = ArraySeq(x)
+    def serialize(x: Byte): ArraySeq[Byte] =
+      ArraySeq.from(serializeN(x, 1))
   }
 }

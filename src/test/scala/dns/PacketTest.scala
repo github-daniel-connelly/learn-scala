@@ -1,13 +1,25 @@
 package dns
 
-import dns.Query._
+import dns.Packet._
 import dns.Serialization._
 import org.scalatest.funsuite.AnyFunSuite
 
 import scala.collection.immutable.ArraySeq
 
-class QueryTest extends AnyFunSuite {
+class PacketTest extends AnyFunSuite {
   def fromBinary(s: String) = Integer.parseInt(s, 2)
+
+  test("serialize.name") {
+    assert(Name("foo").serialize === ArraySeq[Byte](3, 'f', 'o', 'o', 0))
+    assert(
+      Name("foo.com").serialize === ArraySeq[Byte](3, 'f', 'o', 'o', 3, 'c',
+        'o', 'm', 0)
+    )
+    assert(
+      Name("tls.a.co").serialize == ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2,
+        'c', 'o', 0)
+    )
+  }
 
   test("serialize.header") {
     val header =
@@ -32,7 +44,7 @@ class QueryTest extends AnyFunSuite {
   }
 
   test("serialize.question") {
-    val question = Question("www.jupiter.com", 257, 9)
+    val question = Question(Name("www.jupiter.com"), 257, 9)
     val expected = ArraySeq[Byte](
       3, // length of www
       'w', 'w', 'w', // www
@@ -47,28 +59,46 @@ class QueryTest extends AnyFunSuite {
     assert(question.serialize === expected)
   }
 
-  test("serialize.query") {
-    val query = Query(
+  test("serialize.record.empty") {
+    val record = Record(Name("server.net"), 7, 1, 1 << 24, ArraySeq.empty)
+    val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
+      't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 0)
+    assert(record.serialize == expected)
+  }
+
+  test("serialize.packet") {
+    val query = Packet(
       Header(
         fromBinary("10000000001").toShort,
         fromBinary("101010101").toShort,
-        2,
-        0,
-        0,
-        0
+        2, // questions
+        2, // answers
+        1, // authorities
+        1 // additionals
       ),
       List(
-        Question("sub.domain.google.com", 1, 1),
-        Question("www.jupiter.com", 257, 9)
+        Question(Name("sub.domain.google.com"), 1, 1),
+        Question(Name("www.jupiter.com"), 257, 9)
+      ),
+      List(
+        Record(Name("foo.com"), 1, 2, 3, ArraySeq[Byte]()),
+        Record(Name("bar.com"), 4, 5, 6, ArraySeq[Byte](5, 5))
+      ),
+      List(
+        Record(Name("blog.jack.net"), 7, 8, 9, ArraySeq[Byte](7))
+      ),
+      List(
+        Record(Name("blog.jill.net"), 10, 11, 12, ArraySeq[Byte](9, 9, 9))
       )
     )
+
     val expected = ArraySeq[Byte](
       4, 1, // id
       1, 85, // flags
       0, 2, // numQuestions
-      0, 0, // numAnswers
-      0, 0, // numAuthorities
-      0, 0, // numAdditionals
+      0, 2, // numAnswers
+      0, 1, // numAuthorities
+      0, 1, // numAdditionals
 
       // first question
       3, // length of sub
@@ -92,13 +122,28 @@ class QueryTest extends AnyFunSuite {
       'c', 'o', 'm', // com
       0, // nul
       1, 1, // 0x0101 = 257
-      0, 9 // 0x0009 = 9
+      0, 9, // 0x0009 = 9
+
+      // first answer
+      3, 'f', 'o', 'o', 3, 'c', 'o', 'm', 0, 0, 1, 0, 2, 0, 0, 0, 3, 0,
+      0, // 0 data
+      // second answer
+      3, 'b', 'a', 'r', 3, 'c', 'o', 'm', 0, 0, 4, 0, 5, 0, 0, 0, 6, 0, 2, 5,
+      5, // 2 data
+
+      // authority
+      4, 'b', 'l', 'o', 'g', 4, 'j', 'a', 'c', 'k', 3, 'n', 'e', 't', 0, 0, 7,
+      0, 8, 0, 0, 0, 9, 0, 1, 7,
+
+      // additional
+      4, 'b', 'l', 'o', 'g', 4, 'j', 'i', 'l', 'l', 3, 'n', 'e', 't', 0, 0, 10,
+      0, 11, 0, 0, 0, 12, 0, 3, 9, 9, 9
     )
-    assert(query.serialize === expected)
+    assert(query.serialize.zipWithIndex === expected.zipWithIndex)
   }
 
-  test("serialize.example") {
-    val q = Query.recursive("www.example.com", Question.Type.A)
+  test("serialize.recursive") {
+    val q = Packet.recursive("www.example.com", Question.Type.A)
     val r =
       q.copy(header = q.header.copy(id = Integer.parseInt("3c5f", 16).toShort))
     val expected =

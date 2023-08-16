@@ -53,6 +53,7 @@ object Client {
     Future {
       sendSync(bs.toArray).map(ArraySeq.from(_)) match {
         case Success(value) => {
+          println("received datagram:")
           hexdump(value.take(value.lastIndexWhere(_ != 0)))
           promise.success(value)
         }
@@ -62,16 +63,16 @@ object Client {
     promise.future
   }
 
-  def query(q: Query): Unit = {
+  def query(q: Packet): Unit = {
     println(s"query: $q")
     send(q.serialize).onComplete {
-      case Success(value)     => println(s"result: $value")
+      case Success(value)     => println(s"ok")
       case Failure(exception) => println(s"failure: $exception")
     }
   }
 
   def main(args: Array[String]): Unit = {
-    val q = Query.recursive(args(0), Question.Type.A)
+    val q = Packet.recursive(args(0), Question.Type.A)
     query(q)
   }
 }
