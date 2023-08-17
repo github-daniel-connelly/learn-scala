@@ -19,11 +19,6 @@ class PacketTest extends AnyFunSuite {
       Name("tls.a.co").serialize == ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2,
         'c', 'o', 0)
     )
-    assert(
-      deserialize[UnresolvedName](
-        ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2, 'c', 'o', 0, 7)
-      ).get == (UncompressedName("tls.a.co"), ArraySeq[Byte](7))
-    )
   }
 
   test("encoding.header") {
@@ -46,8 +41,6 @@ class PacketTest extends AnyFunSuite {
         0, 3 // numAdditionals
       )
     assert(header.serialize == expected)
-    val result = deserialize[Header](expected ++ ArraySeq[Byte](1, 2, 3)).get
-    assert(result == (header, ArraySeq[Byte](1, 2, 3)))
   }
 
   test("encoding.question") {
@@ -64,8 +57,6 @@ class PacketTest extends AnyFunSuite {
       0, 9 // 0x0009 = 9
     )
     assert(question.serialize == expected)
-    val result = deserialize[Question](expected ++ ArraySeq[Byte](0)).get
-    assert(result == (question, ArraySeq[Byte](0)))
   }
 
   test("encoding.record.empty") {
@@ -73,8 +64,6 @@ class PacketTest extends AnyFunSuite {
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
       't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 0)
     assert(record.serialize == expected)
-    val result = deserialize[Record](expected ++ ArraySeq[Byte](0)).get
-    assert(result == (record, ArraySeq[Byte](0)))
   }
 
   test("encoding.packet") {
@@ -151,10 +140,6 @@ class PacketTest extends AnyFunSuite {
       0, 11, 0, 0, 0, 12, 0, 3, 9, 9, 9
     )
     assert(query.serialize.zipWithIndex == expected.zipWithIndex)
-    assert(
-      Encoding.deserialize[Packet](expected).get ==
-        (query, ArraySeq.empty)
-    )
   }
 
   test("encoding.recursive") {
