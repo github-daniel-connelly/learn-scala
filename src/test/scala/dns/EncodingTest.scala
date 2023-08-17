@@ -38,7 +38,8 @@ class EncodingTest extends AnyFunSuite {
     val b = ArraySeq[Byte](10, 10, 12, 3)
     val expectedNum = fromBinary("0000101000001010")
     val expectedRemaining = ArraySeq[Byte](12, 3)
-    val got = deserialize[Short](b).get
+    val (got, remaining) = deserialize[Short](b).get
     assert(got === expectedNum)
+    assert(remaining == expectedRemaining)
   }
 }
