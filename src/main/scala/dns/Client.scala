@@ -17,6 +17,7 @@ import scala.util.Success
 import scala.util.Failure
 import scala.concurrent.ExecutionContext
 import java.util.concurrent.Executors
+import scala.concurrent.Await
 
 object Client {
   val CloudflareDNSIP = "1.1.1.1"
@@ -72,8 +73,18 @@ object Client {
     promise.future
   }
 
+  def formatAddress(data: ArraySeq[Byte]): String = {
+    val b = data.map(_ & 0xff)
+    f"${b(0)}%d.${b(1)}%d.${b(2)}%d.${b(3)}%d"
+  }
+
+  def display(packet: Packet) = {
+    val answer = packet.answers(0)
+    println(f"${answer.name.name}: ${formatAddress(answer.data)}")
+  }
+
   def main(args: Array[String]): Unit = {
     val q = Packet.recursive(args(0), Question.Type.A)
-    query(q).onComplete(println)
+    Await.ready(query(q).map(display), 5.seconds)
   }
 }
