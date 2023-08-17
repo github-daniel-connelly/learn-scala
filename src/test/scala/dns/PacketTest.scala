@@ -13,30 +13,62 @@ class PacketTest extends AnyFunSuite {
     val num = (1 << 30) | 7
     val expected = ArraySeq[Byte](64.toByte, 0, 0, 7)
     assert(num.serialize == expected)
+    assert(new Parser(expected.toArray).int.get == num)
   }
 
   test("encoding.short") {
     val num = fromBinary("101010101").toShort
     val expected = ArraySeq[Byte](1, 85)
     assert(num.serialize == expected)
+    assert(new Parser(expected.toArray).short.get == num)
   }
 
   test("encoding.byte") {
     val num = fromBinary("10101010").toByte
     val expected = ArraySeq[Byte](170.toByte)
     assert(num.serialize == expected)
+    assert(new Parser(expected.toArray).byte.get == num)
   }
 
   test("encoding.name") {
     assert(Name("foo").serialize == ArraySeq[Byte](3, 'f', 'o', 'o', 0))
+    assert(Name("foo") == new Parser(Array[Byte](3, 'f', 'o', 'o', 0)).name.get)
+
     assert(
       Name("foo.com").serialize == ArraySeq[Byte](3, 'f', 'o', 'o', 3, 'c', 'o',
         'm', 0)
     )
     assert(
+      Name("foo.com") == new Parser(
+        Array[Byte](3, 'f', 'o', 'o', 3, 'c', 'o', 'm', 0)
+      ).name.get
+    )
+
+    assert(
       Name("tls.a.co").serialize == ArraySeq[Byte](3, 't', 'l', 's', 1, 'a', 2,
         'c', 'o', 0)
     )
+    assert(
+      Name("tls.a.co") == new Parser(
+        Array[Byte](3, 't', 'l', 's', 1, 'a', 2, 'c', 'o', 0)
+      ).name.get
+    )
+
+    // format: off
+    val b = Array[Byte](
+      1, 'F',
+      3, 'I', 'S', 'I',
+      4, 'A', 'R', 'P', 'A',
+      0,
+
+      3, 'F', 'O', 'O',
+      (3 << 6).toByte, 0, // ptr to "f.isi.arpa"
+
+      (3 << 6).toByte, 6, // ptr to "arpa"
+    )
+    assert(new Parser(b).name.get == Name("F.ISI.ARPA"))
+    assert(new Parser(b, 12).name.get == Name("FOO.F.ISI.ARPA"))
+    assert(new Parser(b, 18).name.get == Name("ARPA"))
   }
 
   test("encoding.header") {
@@ -59,6 +91,7 @@ class PacketTest extends AnyFunSuite {
         0, 3 // numAdditionals
       )
     assert(header.serialize == expected)
+    assert(header == new Parser(expected.toArray).header.get)
   }
 
   test("encoding.question") {
@@ -75,6 +108,7 @@ class PacketTest extends AnyFunSuite {
       0, 9 // 0x0009 = 9
     )
     assert(question.serialize == expected)
+    assert(question == new Parser(expected.toArray).question.get)
   }
 
   test("encoding.record.empty") {
@@ -82,6 +116,15 @@ class PacketTest extends AnyFunSuite {
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
       't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 0)
     assert(record.serialize == expected)
+    assert(record == new Parser(expected.toArray).record.get)
+  }
+
+  test("encoding.record") {
+    val record = Record(Name("server.net"), 7, 1, 1 << 24, ArraySeq[Byte](1, 2, 3))
+    val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
+      't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 3, 1, 2, 3)
+    assert(record.serialize == expected)
+    assert(record == new Parser(expected.toArray).record.get)
   }
 
   test("encoding.packet") {
@@ -158,6 +201,7 @@ class PacketTest extends AnyFunSuite {
       0, 11, 0, 0, 0, 12, 0, 3, 9, 9, 9
     )
     assert(query.serialize.zipWithIndex == expected.zipWithIndex)
+    assert(query == new Parser(expected.toArray).packet.get)
   }
 
   test("encoding.recursive") {

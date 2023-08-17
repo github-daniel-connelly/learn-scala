@@ -25,8 +25,8 @@ object Client {
   implicit val ec =
     ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
 
-  private def hexdump(bs: ArraySeq[Byte]) = {
-    def format(bs: ArraySeq[Byte]) =
+  private def hexdump(bs: Array[Byte]) = {
+    def format(bs: Array[Byte]) =
       bs.map(b => f"$b%02x").grouped(2).map(_.mkString).mkString(" ")
     bs.zipWithIndex.grouped(16).foreach { group =>
       println(f"${group.head._2}%04x: ${format(group.map(_._1))}")
@@ -44,12 +44,12 @@ object Client {
     receivePacket.getData()
   }
 
-  def send(bs: ArraySeq[Byte]): Future[ArraySeq[Byte]] = {
-    val promise = Promise[ArraySeq[Byte]]()
+  def send(bs: Array[Byte]): Future[Array[Byte]] = {
+    val promise = Promise[Array[Byte]]()
     println("sending datagram:")
     hexdump(bs)
     Future {
-      sendSync(bs.toArray).map(ArraySeq.from(_)) match {
+      sendSync(bs) match {
         case Success(value) => {
           println("received datagram:")
           hexdump(value.take(value.lastIndexWhere(_ != 0)))
@@ -61,16 +61,19 @@ object Client {
     promise.future
   }
 
-  def query(q: Packet): Unit = {
+  def query(q: Packet): Future[Packet] = {
+    val promise = Promise[Packet]()
     println(s"query: $q")
-    send(q.serialize).onComplete {
-      case Success(value)     => println(s"ok")
-      case Failure(exception) => println(s"failure: $exception")
+    send(q.serialize.toArray).map(Packet.parse).onComplete {
+      case Success(Success(packet))    => promise.success(packet)
+      case Success(Failure(exception)) => promise.failure(exception)
+      case Failure(exception)          => promise.failure(exception)
     }
+    promise.future
   }
 
   def main(args: Array[String]): Unit = {
     val q = Packet.recursive(args(0), Question.Type.A)
-    query(q)
+    query(q).onComplete(println)
   }
 }
