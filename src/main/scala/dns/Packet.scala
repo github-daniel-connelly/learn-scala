@@ -1,23 +1,56 @@
 package dns
 
-import dns.Encoding._
 import scala.collection.immutable.ArraySeq
 import scala.util.Random
 import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
 
-case class Name(name: String)
+trait Serializer[T] {
+  def serialize(t: T): ArraySeq[Byte]
+}
 
-object Name {
-  val nul: Byte = 0
-
-  implicit object NameSerializer extends Serializer[Name] {
-    private def serializeSegment(seg: String) =
-      seg.length.toByte.serialize ++ seg.map(_.toByte)
-    def serialize(name: Name): ArraySeq[Byte] =
-      ArraySeq.from(name.name.split('.').flatMap(serializeSegment) :+ nul)
+object Serializer {
+  implicit class SerializerOps[T](value: T) {
+    def serialize(implicit serializer: Serializer[T]): ArraySeq[Byte] =
+      serializer.serialize(value)
   }
+
+  private def serializeN(
+      x: Long,
+      numBytes: Int,
+      acc: List[Byte] = List.empty
+  ): List[Byte] = {
+    if (numBytes <= 0) acc
+    else serializeN(x >>> 8, numBytes - 1, (x & 255).toByte +: acc)
+  }
+
+  implicit object IntSerializer extends Serializer[Int] {
+    def serialize(x: Int): ArraySeq[Byte] =
+      ArraySeq.from(serializeN(x, 4))
+  }
+
+  implicit object ShortSerializer extends Serializer[Short] {
+    def serialize(x: Short): ArraySeq[Byte] =
+      ArraySeq.from(serializeN(x, 2))
+  }
+
+  implicit object ByteSerializer extends Serializer[Byte] {
+    def serialize(x: Byte): ArraySeq[Byte] =
+      ArraySeq.from(serializeN(x, 1))
+  }
+}
+
+case class Name(name: String) {
+  import Serializer._
+
+  private val nul: Byte = 0
+
+  private def serializeSegment(seg: String) =
+    seg.length.toByte.serialize ++ seg.map(_.toByte)
+
+  def serialize: ArraySeq[Byte] =
+    ArraySeq.from(name.split('.').flatMap(serializeSegment) :+ nul)
 }
 
 case class Record(
@@ -26,15 +59,12 @@ case class Record(
     cls: Short,
     ttl: Int,
     data: ArraySeq[Byte]
-)
+) {
+  import Serializer._
 
-object Record {
-  implicit object RecordSerializer extends Serializer[Record] {
-    def serialize(record: Record): ArraySeq[Byte] =
-      record.name.serialize ++ record.typ.serialize ++
-        record.cls.serialize ++ record.ttl.serialize ++
-        record.data.length.toShort.serialize ++ record.data
-  }
+  def serialize: ArraySeq[Byte] =
+    name.serialize ++ typ.serialize ++ cls.serialize ++ ttl.serialize ++
+      data.length.toShort.serialize ++ data
 }
 
 case class Header(
@@ -44,26 +74,29 @@ case class Header(
     numAnswers: Short,
     numAuthorities: Short,
     numAdditionals: Short
-)
+) {
+  import Serializer._
+  def serialize: ArraySeq[Byte] = ArraySeq(
+    id,
+    flags,
+    numQuestions,
+    numAnswers,
+    numAuthorities,
+    numAdditionals
+  ).flatMap(_.serialize)
+}
 
 object Header {
   object Flags {
     val RecursionDesired: Short = 1 << 8
   }
-
-  implicit object HeaderSerializer extends Serializer[Header] {
-    def serialize(header: Header): ArraySeq[Byte] = ArraySeq(
-      header.id,
-      header.flags,
-      header.numQuestions,
-      header.numAnswers,
-      header.numAuthorities,
-      header.numAdditionals
-    ).flatMap(_.serialize)
-  }
 }
 
-case class Question(name: Name, typ: Short, cls: Short)
+case class Question(name: Name, typ: Short, cls: Short) {
+  import Serializer._
+  def serialize: ArraySeq[Byte] =
+    name.serialize ++ typ.serialize ++ cls.serialize
+}
 
 object Question {
   object Type {
@@ -73,11 +106,6 @@ object Question {
   object Class {
     val In: Short = 1
   }
-
-  implicit object QuestionSerializer extends Serializer[Question] {
-    def serialize(question: Question): ArraySeq[Byte] =
-      question.name.serialize ++ question.typ.serialize ++ question.cls.serialize
-  }
 }
 
 case class Packet(
@@ -86,7 +114,14 @@ case class Packet(
     answers: List[Record],
     authorities: List[Record],
     additionals: List[Record]
-)
+) {
+  def serialize: ArraySeq[Byte] =
+    header.serialize ++ questions.flatMap(_.serialize) ++ List(
+      answers,
+      authorities,
+      additionals
+    ).flatMap(_.flatMap(_.serialize))
+}
 
 object Packet {
   def randomID: Short = Random.nextInt(1 << 16).toShort
@@ -99,13 +134,4 @@ object Packet {
       List(),
       List()
     )
-
-  implicit object QuerySerializer extends Serializer[Packet] {
-    def serialize(t: Packet): ArraySeq[Byte] =
-      t.header.serialize ++ t.questions.flatMap(_.serialize) ++ List(
-        t.answers,
-        t.authorities,
-        t.additionals
-      ).flatMap(_.flatMap(_.serialize))
-  }
 }

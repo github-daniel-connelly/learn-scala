@@ -1,7 +1,5 @@
 package dns
 
-import dns.Encoding._
-
 import scala.concurrent.duration._
 import scala.collection.immutable.ArraySeq
 import java.net.Socket
