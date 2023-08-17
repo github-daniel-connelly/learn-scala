@@ -77,6 +77,25 @@ object Encoding {
       deserializeN(b, 1).map(pair => (pair._1.toByte, pair._2))
   }
 
+  implicit object StringDeserializer extends Deserializer[String] {
+    private def deserialize(
+        b: ArraySeq[Byte],
+        acc: List[String]
+    ): Try[(String, ArraySeq[Byte])] = {
+      if (b.isEmpty) Failure(UnexpectedEOFException())
+      else if (b.head == 0) Success(acc.reverseIterator.mkString("."), b.tail)
+      else if (b.head > b.tail.length - 1) Failure(UnexpectedEOFException())
+      else {
+        val segment = b.tail.take(b.head)
+        val remaining = b.tail.drop(b.head)
+        deserialize(remaining, segment.map(_.toChar).mkString :: acc)
+      }
+    }
+
+    def deserialize(b: ArraySeq[Byte]): Try[(String, ArraySeq[Byte])] =
+      deserialize(b, List.empty)
+  }
+
   def deserializeList[T: Deserializer](
       b: ArraySeq[Byte],
       n: Int,

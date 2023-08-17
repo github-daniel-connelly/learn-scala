@@ -7,6 +7,26 @@ import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
 
+sealed trait UnresolvedName {
+  def resolve(packet: ArraySeq[Byte]): Try[Name] = this match {
+    case CompressedName(prefix, offset) => ???
+    case UncompressedName(name)         => Success(Name(name))
+  }
+}
+
+case class CompressedName(prefix: String, offset: Int) extends UnresolvedName
+case class UncompressedName(name: String) extends UnresolvedName
+
+object UnresolvedName {
+  implicit object UnresolvedNameDeserializer
+      extends Deserializer[UnresolvedName] {
+    def deserialize(b: ArraySeq[Byte]): Try[(UnresolvedName, ArraySeq[Byte])] =
+      Encoding.deserialize[String](b).map { case (s, b) =>
+        (UncompressedName(s), b)
+      }
+  }
+}
+
 case class Name(name: String)
 
 object Name {
@@ -17,28 +37,6 @@ object Name {
       seg.length.toByte.serialize ++ seg.map(_.toByte)
     def serialize(name: Name): ArraySeq[Byte] =
       ArraySeq.from(name.name.split('.').flatMap(serializeSegment) :+ nul)
-  }
-
-  implicit object NameDeserializer extends Deserializer[Name] {
-    // TODO: implement decompression:
-    // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
-    private def deserialize(
-        b: ArraySeq[Byte],
-        acc: List[String]
-    ): Try[(Name, ArraySeq[Byte])] = {
-      if (b.isEmpty) Failure(UnexpectedEOFException())
-      else if (b.head == 0)
-        Success(Name(acc.reverseIterator.mkString(".")), b.tail)
-      else if (b.head > b.tail.length - 1) Failure(UnexpectedEOFException())
-      else {
-        val segment = b.tail.take(b.head)
-        val remaining = b.tail.drop(b.head)
-        deserialize(remaining, segment.map(_.toChar).mkString :: acc)
-      }
-    }
-
-    def deserialize(b: ArraySeq[Byte]): Try[(Name, ArraySeq[Byte])] =
-      deserialize(b, List.empty)
   }
 }
 
@@ -61,12 +59,16 @@ object Record {
   implicit object RecordDeserializer extends Deserializer[Record] {
     def deserialize(b: ArraySeq[Byte]): Try[(Record, ArraySeq[Byte])] =
       for {
-        (name, b) <- Encoding.deserialize[Name](b)
-        (typ, b) <- Encoding.deserialize[Short](b)
-        (cls, b) <- Encoding.deserialize[Short](b)
-        (ttl, b) <- Encoding.deserialize[Int](b)
-        (n, b) <- Encoding.deserialize[Short](b)
-      } yield (Record(name, typ, cls, ttl, b.take(n)), b.drop(n))
+        (uname, remaining) <- Encoding.deserialize[UnresolvedName](b)
+        name <- uname.resolve(b)
+        (typ, remaining) <- Encoding.deserialize[Short](remaining)
+        (cls, remaining) <- Encoding.deserialize[Short](remaining)
+        (ttl, remaining) <- Encoding.deserialize[Int](remaining)
+        (n, remaining) <- Encoding.deserialize[Short](remaining)
+      } yield (
+        Record(name, typ, cls, ttl, remaining.take(n)),
+        remaining.drop(n)
+      )
   }
 }
 
@@ -139,10 +141,11 @@ object Question {
   implicit object QuestionDeserializer extends Deserializer[Question] {
     def deserialize(b: ArraySeq[Byte]): Try[(Question, ArraySeq[Byte])] =
       for {
-        (name, b) <- Encoding.deserialize[Name](b)
-        (typ, b) <- Encoding.deserialize[Short](b)
-        (cls, b) <- Encoding.deserialize[Short](b)
-      } yield (Question(name, typ, cls), b)
+        (uname, remaining) <- Encoding.deserialize[UnresolvedName](b)
+        name <- uname.resolve(b)
+        (typ, remaining) <- Encoding.deserialize[Short](remaining)
+        (cls, remaining) <- Encoding.deserialize[Short](remaining)
+      } yield (Question(name, typ, cls), remaining)
   }
 }
 
