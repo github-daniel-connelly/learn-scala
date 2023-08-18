@@ -1,12 +1,12 @@
 package dns
 
 import dns.Packet._
-import dns.Serializer._
+import dns.Encoding._
 import org.scalatest.funsuite.AnyFunSuite
 
 import scala.collection.immutable.ArraySeq
 
-class PacketTest extends AnyFunSuite {
+class EncodingTest extends AnyFunSuite {
   def fromBinary(s: String) = Integer.parseInt(s, 2)
 
   test("encoding.int") {
@@ -205,7 +205,7 @@ class PacketTest extends AnyFunSuite {
   }
 
   test("encoding.recursive") {
-    val q = Packet.recursive("www.example.com", Question.Type.A)
+    val q = Packet.recursive("www.example.com", Type.A)
     val r =
       q.copy(header = q.header.copy(id = Integer.parseInt("3c5f", 16).toShort))
     val expected =

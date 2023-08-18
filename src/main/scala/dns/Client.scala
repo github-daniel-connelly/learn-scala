@@ -1,5 +1,6 @@
 package dns
 
+import dns.Encoding._
 import scala.concurrent.duration._
 import scala.collection.immutable.ArraySeq
 import java.net.Socket
@@ -65,8 +66,11 @@ object Client {
   def query(q: Packet): Future[Packet] = {
     val promise = Promise[Packet]()
     println(s"query: $q")
-    send(q.serialize.toArray).map(Packet.parse).onComplete {
-      case Success(Success(packet))    => promise.success(packet)
+    send(q.serialize.toArray).map(Encoding.parse).onComplete {
+      case Success(Success(packet)) => {
+        println(s"response: $packet")
+        promise.success(packet)
+      }
       case Success(Failure(exception)) => promise.failure(exception)
       case Failure(exception)          => promise.failure(exception)
     }
@@ -84,7 +88,7 @@ object Client {
   }
 
   def main(args: Array[String]): Unit = {
-    val q = Packet.recursive(args(0), Question.Type.A)
+    val q = Packet.recursive(args(0), Type.A)
     Await.ready(query(q).map(display), 5.seconds)
   }
 }
