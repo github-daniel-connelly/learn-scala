@@ -1,94 +1,73 @@
 package dns
 
 import dns.Encoding._
-import scala.concurrent.duration._
-import scala.collection.immutable.ArraySeq
-import java.net.Socket
-import scala.concurrent.Promise
-import scala.concurrent.Future
-import scala.util.Try
-import java.io.BufferedWriter
+
 import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
+import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.DatagramPacket
-import scala.util.Success
-import scala.util.Failure
-import scala.concurrent.ExecutionContext
+import java.net.Socket
 import java.util.concurrent.Executors
+import scala.collection.immutable.ArraySeq
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration._
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
-object Client {
-  val CloudflareDNSIP = "1.1.1.1"
-  val DNSPort = 53
-  val DNSUDPPacketSize = 1024
-  implicit val ec =
-    ExecutionContext.fromExecutor(Executors.newFixedThreadPool(2))
+class Client(implicit ec: ExecutionContext) {
+  private val Cloudflare = "1.1.1.1"
+  private val DnsPort = 53
+  private val DnsUdpPacketSize = 1024
 
-  private def hexdump(bs: Array[Byte]) = {
-    def format(bs: Array[Byte]) =
-      bs.map(b => f"$b%02x").grouped(2).map(_.mkString).mkString(" ")
-    bs.zipWithIndex.grouped(16).foreach { group =>
-      println(f"${group.head._2}%04x: ${format(group.map(_._1))}")
-    }
-  }
-
-  private def sendSync(bs: Array[Byte]): Try[Array[Byte]] = Try {
+  private def querySync(bs: Array[Byte]): Try[Array[Byte]] = {
     val socket = new DatagramSocket
-    val address = InetAddress.getByName(CloudflareDNSIP)
-    val sendPacket = new DatagramPacket(bs.toArray, bs.length, address, DNSPort)
-    socket.send(sendPacket)
-    val buf = Array.fill(DNSUDPPacketSize)(0.toByte)
-    val receivePacket = new DatagramPacket(buf, buf.length)
-    socket.receive(receivePacket)
-    receivePacket.getData()
+    val result = Try {
+      val address = InetAddress.getByName(Cloudflare)
+      val sendPacket =
+        new DatagramPacket(bs.toArray, bs.length, address, DnsPort)
+      socket.send(sendPacket)
+      val buf = Array.fill(DnsUdpPacketSize)(0.toByte)
+      val receivePacket = new DatagramPacket(buf, buf.length)
+      socket.receive(receivePacket)
+      receivePacket.getData()
+    }
+    socket.close
+    result
   }
 
-  def send(bs: Array[Byte]): Future[Array[Byte]] = {
+  private def query(bs: Array[Byte]): Future[Array[Byte]] = {
     val promise = Promise[Array[Byte]]()
-    println("sending datagram:")
-    hexdump(bs)
     Future {
-      sendSync(bs) match {
-        case Success(value) => {
-          println("received datagram:")
-          hexdump(value.take(value.lastIndexWhere(_ != 0)))
-          promise.success(value)
-        }
+      querySync(bs) match {
+        case Success(value)     => promise.success(value)
         case Failure(exception) => promise.failure(exception)
       }
     }
     promise.future
   }
 
-  def query(q: Packet): Future[Packet] = {
+  private def query(q: Packet): Future[Packet] = {
     val promise = Promise[Packet]()
-    println(s"query: $q")
-    send(q.serialize.toArray).map(Encoding.parse).onComplete {
-      case Success(Success(packet)) => {
-        println(s"response: $packet")
-        promise.success(packet)
-      }
+    query(q.serialize.toArray).map(Encoding.parse).onComplete {
+      case Success(Success(packet))    => promise.success(packet)
       case Success(Failure(exception)) => promise.failure(exception)
       case Failure(exception)          => promise.failure(exception)
     }
     promise.future
   }
 
-  def formatAddress(data: ArraySeq[Byte]): String = {
-    val b = data.map(_ & 0xff)
-    f"${b(0)}%d.${b(1)}%d.${b(2)}%d.${b(3)}%d"
-  }
+  private def formatAddress(data: ArraySeq[Byte]): String =
+    data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
 
-  def display(packet: Packet) = {
-    val answer = packet.answers(0)
-    println(f"${answer.name.name}: ${formatAddress(answer.data)}")
-  }
-
-  def main(args: Array[String]): Unit = {
-    val q = Packet.recursive(args(0), Type.A)
-    Await.ready(query(q).map(display), 5.seconds)
+  def resolve(name: String, server: String = Cloudflare): Future[String] = {
+    val q = Packet.recursive(name, Type.A)
+    query(q).map(packet => formatAddress(packet.answers(0).data))
   }
 }
