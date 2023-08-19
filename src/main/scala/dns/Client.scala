@@ -21,19 +21,25 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-class Client(implicit ec: ExecutionContext) {
-  private val Cloudflare = "1.1.1.1"
-  private val DnsPort = 53
-  private val DnsUdpPacketSize = 1024
+object Client {
+  val Cloudflare = "1.1.1.1"
+  val DnsPort = 53
+  val DnsUdpPacketSize = 1024
+}
 
+class Client(
+    val host: String = Client.Cloudflare,
+    val port: Int = Client.DnsPort
+)(implicit
+    ec: ExecutionContext
+) {
   private def querySync(bs: Array[Byte]): Try[Array[Byte]] = {
     val socket = new DatagramSocket
     val result = Try {
-      val address = InetAddress.getByName(Cloudflare)
-      val sendPacket =
-        new DatagramPacket(bs.toArray, bs.length, address, DnsPort)
+      val address = InetAddress.getByName(host)
+      val sendPacket = new DatagramPacket(bs.toArray, bs.length, address, port)
       socket.send(sendPacket)
-      val buf = Array.fill(DnsUdpPacketSize)(0.toByte)
+      val buf = Array.fill(Client.DnsUdpPacketSize)(0.toByte)
       val receivePacket = new DatagramPacket(buf, buf.length)
       socket.receive(receivePacket)
       receivePacket.getData()
@@ -66,7 +72,7 @@ class Client(implicit ec: ExecutionContext) {
   private def formatAddress(data: ArraySeq[Byte]): String =
     data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
 
-  def resolve(name: String, server: String = Cloudflare): Future[String] = {
+  def resolve(name: String): Future[String] = {
     val q = Packet.recursive(name, Type.A)
     query(q).map(packet => formatAddress(packet.answers(0).data))
   }
