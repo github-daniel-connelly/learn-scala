@@ -112,7 +112,7 @@ class EncodingTest extends AnyFunSuite {
   }
 
   test("encoding.record.NS") {
-    val record = Record(Name("server.net"), Type.NS, 1, 1 << 24, NameServer("a.b.c"))
+    val record = NSRecord(Name("server.net"),  1, 1 << 24, "a.b.c")
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
       't', 0, 0, 2, 0, 1, 1, 0, 0, 0, 0, 7, 1, 'a', 1, 'b', 1, 'c', 0)
     assert(record.serialize == expected)
@@ -120,7 +120,7 @@ class EncodingTest extends AnyFunSuite {
   }
 
   test("encoding.record.A") {
-    val record = Record(Name("server.net"), Type.A, 1, 1 << 24, IpAddr("1.2.3.24"))
+    val record = ARecord(Name("server.net"), 1, 1 << 24, "1.2.3.24")
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
       't', 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 4, 1, 2, 3, 24)
     assert(record.serialize == expected)
@@ -142,14 +142,14 @@ class EncodingTest extends AnyFunSuite {
         Question(Name("www.jupiter.com"), 257, 9)
       ),
       List(
-        Record(Name("foo.com"), Type.A, 2, 3, IpAddr("8.8.8.8")),
-        Record(Name("bar.com"), Type.NS, 5, 6, NameServer("root.net"))
+        ARecord(Name("foo.com"),  2, 3, "8.8.8.8"),
+        NSRecord(Name("bar.com"),  5, 6, "root.net")
       ),
       List(
-        Record(Name("blog.jack.net"), Type.A, 8, 9, IpAddr("1.1.1.1"))
+        ARecord(Name("blog.jack.net"),  8, 9, "1.1.1.1")
       ),
       List(
-        Record(Name("blog.jill.net"), Type.NS, 11, 12, NameServer("root-2.net"))
+        NSRecord(Name("blog.jill.net"),  11, 12, "root-2.net")
       )
     )
 

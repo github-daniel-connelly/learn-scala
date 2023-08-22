@@ -112,7 +112,7 @@ class Client(
       if (logging) println(s"received: $packet")
       packet.answers.headOption match {
         case None         => throw new NoRecordFoundException(name)
-        case Some(answer) => answer.data.toString
+        case Some(answer) => answer.toString
       }
     })
   }

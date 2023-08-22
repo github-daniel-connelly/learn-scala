@@ -47,6 +47,51 @@ object Encoding {
       ArraySeq.from(name.name.split('.').flatMap(serializeSegment) :+ nul)
   }
 
+  implicit object NSRecordSerializer extends Serializer[NSRecord] {
+    def serialize(t: NSRecord): ArraySeq[Byte] = {
+      val server = Name(t.server).serialize
+      t.name.serialize ++
+        t.typ.serialize ++
+        t.cls.serialize ++
+        t.ttl.serialize ++ server.length.toShort.serialize ++
+        server
+    }
+  }
+
+  implicit object ARecordSerializer extends Serializer[ARecord] {
+    def serializeAddr(addr: String): ArraySeq[Byte] =
+      ArraySeq[Byte](0, 4) ++ ArraySeq.from(
+        addr.split('.').map(Integer.parseInt).map(_.toByte)
+      )
+
+    def serialize(t: ARecord): ArraySeq[Byte] =
+      t.name.serialize ++
+        t.typ.serialize ++
+        t.cls.serialize ++
+        t.ttl.serialize ++
+        serializeAddr(t.addr)
+  }
+
+  implicit object OpaqueRecordSerializer extends Serializer[OpaqueRecord] {
+    def serialize(t: OpaqueRecord): ArraySeq[Byte] = ???
+  }
+
+  implicit object RecordSerializer extends Serializer[Record] {
+    def serialize(record: Record): ArraySeq[Byte] = record match {
+      case a @ ARecord(_, _, _, _)              => a.serialize
+      case ns @ NSRecord(_, _, _, _)            => ns.serialize
+      case opaque @ OpaqueRecord(_, _, _, _, _) => opaque.serialize
+    }
+    /*
+      record.name.serialize ++
+        record.typ.serialize ++
+        record.cls.serialize ++
+        record.ttl.serialize ++
+        record.data.serialize
+     */
+  }
+
+  /*
   implicit object RecordDataSerializer extends Serializer[RecordData] {
     def serialize(t: RecordData): ArraySeq[Byte] = {
       val data = t match {
@@ -60,6 +105,7 @@ object Encoding {
       data.length.toShort.serialize ++ data
     }
   }
+   */
 
   private def formatAddress(data: ArraySeq[Byte]): String =
     data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
@@ -73,15 +119,6 @@ object Encoding {
       header.numAuthorities,
       header.numAdditionals
     ).flatMap(_.serialize)
-  }
-
-  implicit object RecordSerializer extends Serializer[Record] {
-    def serialize(record: Record): ArraySeq[Byte] =
-      record.name.serialize ++
-        record.typ.serialize ++
-        record.cls.serialize ++
-        record.ttl.serialize ++
-        record.data.serialize
   }
 
   implicit object QuestionSerializer extends Serializer[Question] {
@@ -175,28 +212,45 @@ object Encoding {
       cls <- short
     } yield Question(name, typ, cls)
 
+    /*
     def recordData(typ: Short, len: Short): Try[RecordData] = Try(typ match {
       case Type.A => {
-        advance(len)
-        IpAddr(formatAddress(ArraySeq.from(b.slice(pos - len, pos))))
       }
       case Type.NS => NameServer(name.get.name)
       case typ => {
-        advance(len)
-        OpaqueData(b.slice(pos - len, pos))
       }
     })
+        len <- short
+        data <- recordData(typ, len)
+      } yield Record(name, typ, cls, ttl, data)
+    }
+     */
 
-    def record: Try[Record] = {
+    def record(name: Name, typ: Short, cls: Short, ttl: Int): Try[Record] =
+      short.flatMap(len =>
+        typ match {
+          case Type.A =>
+            advance(len)
+            val addr = formatAddress(ArraySeq.from(b.slice(pos - len, pos)))
+            Success(ARecord(name, cls, ttl, addr))
+          case Type.NS => {
+            this.name.map(server => NSRecord(name, cls, ttl, server.name))
+          }
+          case typ => {
+            advance(len)
+            Success(OpaqueRecord(name, typ, cls, ttl, b.slice(pos - len, pos)))
+          }
+        }
+      )
+
+    def record: Try[Record] =
       for {
         name <- name
         typ <- short
         cls <- short
         ttl <- int
-        len <- short
-        data <- recordData(typ, len)
-      } yield Record(name, typ, cls, ttl, data)
-    }
+        record <- record(name, typ, cls, ttl)
+      } yield record
 
     def header: Try[Header] = for {
       id <- short

@@ -22,35 +22,40 @@ case class Header(
 
 case class Name(name: String)
 
-// TODO: refactor Record to enforce A vs NS and associated data
+object Class {
+  val In: Short = 1
+}
 
 object Type {
   val A: Short = 1
   val NS: Short = 2
 }
 
-object Class {
-  val In: Short = 1
-}
+sealed abstract class Record(val typ: Short) {
+  def name: Name
+  def cls: Short
+  def ttl: Int
 
-sealed trait RecordData {
-  override def toString(): String = this match {
-    case NameServer(name) => name
-    case IpAddr(addr)     => addr
-    case OpaqueData(data) => s"[opaque data of length ${data.length}"
+  override def toString: String = this match {
+    case ARecord(_, _, _, addr)      => addr
+    case NSRecord(_, _, _, server)   => server
+    case OpaqueRecord(_, _, _, _, _) => "[opaque data]"
   }
 }
-case class IpAddr(addr: String) extends RecordData
-case class NameServer(name: String) extends RecordData
-case class OpaqueData(data: Array[Byte]) extends RecordData
 
-case class Record(
+case class ARecord(name: Name, cls: Short, ttl: Int, addr: String)
+    extends Record(Type.A)
+
+case class NSRecord(name: Name, cls: Short, ttl: Int, server: String)
+    extends Record(Type.NS)
+
+case class OpaqueRecord(
     name: Name,
-    typ: Short,
+    override val typ: Short,
     cls: Short,
     ttl: Int,
-    data: RecordData
-)
+    data: Array[Byte]
+) extends Record(typ)
 
 case class Question(name: Name, typ: Short, cls: Short)
 
