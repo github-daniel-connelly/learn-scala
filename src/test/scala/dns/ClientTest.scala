@@ -50,7 +50,7 @@ class ClientTest extends AnyFunSuite {
           val responsePacket = Packet(
             Header(1, 4, 1, 1, 0, 0),
             List(Question(Name("foo.bar"), 1, 2)),
-            List(Record(Name("foo.bar"), 1, 2, 3, ArraySeq[Byte](1, 2, 3, 4))),
+            List(Record(Name("foo.bar"), 1, 2, 3, IpAddr("1.2.3.4"))),
             List(),
             List()
           )

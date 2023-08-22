@@ -47,6 +47,23 @@ object Encoding {
       ArraySeq.from(name.name.split('.').flatMap(serializeSegment) :+ nul)
   }
 
+  implicit object RecordDataSerializer extends Serializer[RecordData] {
+    def serialize(t: RecordData): ArraySeq[Byte] = {
+      val data = t match {
+        case IpAddr(addr) =>
+          ArraySeq.from(
+            addr.split('.').map(_.toInt.toByte).flatMap(_.serialize)
+          )
+        case NameServer(name) => Name(name).serialize
+        case OpaqueData(data) => ArraySeq.from(data)
+      }
+      data.length.toShort.serialize ++ data
+    }
+  }
+
+  private def formatAddress(data: ArraySeq[Byte]): String =
+    data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
+
   implicit object HeaderSerializer extends Serializer[Header] {
     def serialize(header: Header): ArraySeq[Byte] = ArraySeq(
       header.id,
@@ -64,8 +81,7 @@ object Encoding {
         record.typ.serialize ++
         record.cls.serialize ++
         record.ttl.serialize ++
-        record.data.length.toShort.serialize ++
-        record.data
+        record.data.serialize
   }
 
   implicit object QuestionSerializer extends Serializer[Question] {
@@ -86,6 +102,9 @@ object Encoding {
 
   case class UnexpectedEofException(n: Int)
       extends Exception(s"unexpected eof at $n")
+
+  case class InvalidRecordType(typ: Int)
+      extends Exception(s"invalid record type: $typ")
 
   // shout out to recursive descent. see commit history for context
   // TODO: figure out how to make this more functional again without
@@ -119,12 +138,16 @@ object Encoding {
 
     private val mask: Byte = (3 << 6).toByte
 
+    // ugh
+    private def widen(byte: Byte): Int =
+      byte.toInt & 0xff
+
     private def segments: Try[List[String]] = Try {
       // segment*pointer?
       var list = List.empty[String]
       // segment*
       while (head != 0 && (head & mask) == 0) {
-        val len = head
+        val len: Int = head
         list = new String(b, pos + 1, len) :: list
         pos += len + 1
       }
@@ -134,12 +157,12 @@ object Encoding {
         pos += 1
       } else {
         assert((head & mask) != 0)
-        ptr = Some(((head & (~mask)).toShort << 8) | b(pos + 1))
+        ptr = Some(((widen(head) & (~widen(mask))) << 8) | widen(b(pos + 1)))
         pos += 2
       }
       (list, ptr)
     }.flatMap {
-      case (segments, None) => Success(segments)
+      case (segs, None) => Success(segs)
       case (prefix, Some(ptr)) =>
         new Parser(b, ptr).segments.map(suffix => suffix ++ prefix)
     }
@@ -152,23 +175,27 @@ object Encoding {
       cls <- short
     } yield Question(name, typ, cls)
 
+    def recordData(typ: Short, len: Short): Try[RecordData] = Try(typ match {
+      case Type.A => {
+        advance(len)
+        IpAddr(formatAddress(ArraySeq.from(b.slice(pos - len, pos))))
+      }
+      case Type.NS => NameServer(name.get.name)
+      case typ => {
+        advance(len)
+        OpaqueData(b.slice(pos - len, pos))
+      }
+    })
+
     def record: Try[Record] = {
-      val result = for {
+      for {
         name <- name
         typ <- short
         cls <- short
         ttl <- int
         len <- short
-      } yield (
-        Record(name, typ, cls, ttl, ArraySeq.from(b.slice(pos, pos + len))),
-        len
-      )
-      result.map {
-        case (record, len) => {
-          pos += len
-          record
-        }
-      }
+        data <- recordData(typ, len)
+      } yield Record(name, typ, cls, ttl, data)
     }
 
     def header: Try[Header] = for {

@@ -20,28 +20,53 @@ import scala.concurrent.duration._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+import scala.util.Random
 
 object Client {
-  val Cloudflare = "1.1.1.1"
+  val RootNameServer = "198.41.0.4"
   val DnsPort = 53
   val DnsUdpPacketSize = 1024
 }
 
+case class NoRecordFoundException(name: String)
+    extends Exception(s"no record found for $name")
+
 class Client(
-    val host: String = Client.Cloudflare,
-    val port: Int = Client.DnsPort
+    val host: String = Client.RootNameServer,
+    val port: Int = Client.DnsPort,
+    val logging: Boolean = false
 )(implicit
     ec: ExecutionContext
 ) {
+
+  private def hexdump(bs: Array[Byte]) = {
+    def format(bs: Stream[Byte]) =
+      bs.map(b => f"$b%02x").grouped(2).map(_.mkString).mkString(" ")
+    val until = bs.lastIndexWhere(_ != 0)
+    val untilEndOfLine = (until / 16 + 1) * 16
+    val data = bs.toStream.concat(Stream.continually(0.toByte))
+    data.take(untilEndOfLine).zipWithIndex.grouped(16).foreach { group =>
+      println(f"${group.head._2}%04x: ${format(group.map(_._1))}")
+    }
+  }
+
   private def querySync(bs: Array[Byte]): Try[Array[Byte]] = {
     val socket = new DatagramSocket
     val result = Try {
       val address = InetAddress.getByName(host)
+      if (logging) {
+        println("sending data:")
+        hexdump(bs)
+      }
       val sendPacket = new DatagramPacket(bs.toArray, bs.length, address, port)
       socket.send(sendPacket)
       val buf = Array.fill(Client.DnsUdpPacketSize)(0.toByte)
       val receivePacket = new DatagramPacket(buf, buf.length)
       socket.receive(receivePacket)
+      if (logging) {
+        println("received data:")
+        hexdump(receivePacket.getData())
+      }
       receivePacket.getData()
     }
     socket.close
@@ -69,11 +94,26 @@ class Client(
     promise.future
   }
 
-  private def formatAddress(data: ArraySeq[Byte]): String =
-    data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
+  private def randomID: Short = Random.nextInt(1 << 16).toShort
+
+  def request(name: String, typ: Short, flags: Short = 0): Packet =
+    Packet(
+      Header(randomID, flags, 1, 0, 0, 0),
+      List(Question(Name(name), typ, Class.In)),
+      List(),
+      List(),
+      List()
+    )
 
   def resolve(name: String): Future[String] = {
-    val q = Packet.recursive(name, Type.A)
-    query(q).map(packet => formatAddress(packet.answers(0).data))
+    val q = request(name, Type.A)
+    if (logging) println(s"sending: $q")
+    query(q).map(packet => {
+      if (logging) println(s"received: $packet")
+      packet.answers.headOption match {
+        case None         => throw new NoRecordFoundException(name)
+        case Some(answer) => answer.data.toString
+      }
+    })
   }
 }

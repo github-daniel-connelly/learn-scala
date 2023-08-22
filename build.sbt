@@ -23,8 +23,14 @@ version := "1.0"
 // Want to use a published library in your project?
 // You can define other libraries as dependencies in your build like this:
 
-libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.16"
-libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.16" % "test"
+libraryDependencies ++= Seq(
+  "org.apache.pekko" %% "pekko-actor-typed" % pekkoVersion,
+  "ch.qos.logback" % "logback-classic" % "1.2.12",
+  "org.apache.pekko" %% "pekko-actor-testkit-typed" % pekkoVersion % Test,
+  "org.scalatest" %% "scalatest" % "3.2.15" % Test,
+  "org.scalactic" %% "scalactic" % "3.2.16",
+  "org.scalatest" %% "scalatest" % "3.2.16" % "test"
+)
 
 // Here, `libraryDependencies` is a set of dependencies, and by using `+=`,
 // we're adding the scala-parser-combinators dependency to the set of dependencies

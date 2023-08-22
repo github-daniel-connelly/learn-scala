@@ -111,18 +111,18 @@ class EncodingTest extends AnyFunSuite {
     assert(question == new Parser(expected.toArray).question.get)
   }
 
-  test("encoding.record.empty") {
-    val record = Record(Name("server.net"), 7, 1, 1 << 24, ArraySeq.empty)
+  test("encoding.record.NS") {
+    val record = Record(Name("server.net"), Type.NS, 1, 1 << 24, NameServer("a.b.c"))
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
-      't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 0)
+      't', 0, 0, 2, 0, 1, 1, 0, 0, 0, 0, 7, 1, 'a', 1, 'b', 1, 'c', 0)
     assert(record.serialize == expected)
     assert(record == new Parser(expected.toArray).record.get)
   }
 
-  test("encoding.record") {
-    val record = Record(Name("server.net"), 7, 1, 1 << 24, ArraySeq[Byte](1, 2, 3))
+  test("encoding.record.A") {
+    val record = Record(Name("server.net"), Type.A, 1, 1 << 24, IpAddr("1.2.3.24"))
     val expected = ArraySeq[Byte](6, 's', 'e', 'r', 'v', 'e', 'r', 3, 'n', 'e',
-      't', 0, 0, 7, 0, 1, 1, 0, 0, 0, 0, 3, 1, 2, 3)
+      't', 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 4, 1, 2, 3, 24)
     assert(record.serialize == expected)
     assert(record == new Parser(expected.toArray).record.get)
   }
@@ -142,17 +142,18 @@ class EncodingTest extends AnyFunSuite {
         Question(Name("www.jupiter.com"), 257, 9)
       ),
       List(
-        Record(Name("foo.com"), 1, 2, 3, ArraySeq[Byte]()),
-        Record(Name("bar.com"), 4, 5, 6, ArraySeq[Byte](5, 5))
+        Record(Name("foo.com"), Type.A, 2, 3, IpAddr("8.8.8.8")),
+        Record(Name("bar.com"), Type.NS, 5, 6, NameServer("root.net"))
       ),
       List(
-        Record(Name("blog.jack.net"), 7, 8, 9, ArraySeq[Byte](7))
+        Record(Name("blog.jack.net"), Type.A, 8, 9, IpAddr("1.1.1.1"))
       ),
       List(
-        Record(Name("blog.jill.net"), 10, 11, 12, ArraySeq[Byte](9, 9, 9))
+        Record(Name("blog.jill.net"), Type.NS, 11, 12, NameServer("root-2.net"))
       )
     )
 
+    // format: off
     val expected = ArraySeq[Byte](
       4, 1, // id
       1, 85, // flags
@@ -186,26 +187,31 @@ class EncodingTest extends AnyFunSuite {
       0, 9, // 0x0009 = 9
 
       // first answer
-      3, 'f', 'o', 'o', 3, 'c', 'o', 'm', 0, 0, 1, 0, 2, 0, 0, 0, 3, 0,
-      0, // 0 data
+      3, 'f', 'o', 'o', 3, 'c', 'o', 'm', 0, 0, 1, 0, 2, 0, 0, 0, 3,
+      0, 4, 8, 8, 8, 8, // data
       // second answer
-      3, 'b', 'a', 'r', 3, 'c', 'o', 'm', 0, 0, 4, 0, 5, 0, 0, 0, 6, 0, 2, 5,
-      5, // 2 data
+      3, 'b', 'a', 'r', 3, 'c', 'o', 'm', 0, 0, 2, 0, 5, 0, 0, 0, 6,
+      0, 10, 4, 'r', 'o', 'o', 't', 3, 'n', 'e', 't', 0,
 
       // authority
-      4, 'b', 'l', 'o', 'g', 4, 'j', 'a', 'c', 'k', 3, 'n', 'e', 't', 0, 0, 7,
-      0, 8, 0, 0, 0, 9, 0, 1, 7,
+      4, 'b', 'l', 'o', 'g', 4, 'j', 'a', 'c', 'k', 3, 'n', 'e', 't', 0,
+      0, 1, 0, 8, 0, 0, 0, 9, 0, 4, 1, 1, 1, 1,
 
       // additional
-      4, 'b', 'l', 'o', 'g', 4, 'j', 'i', 'l', 'l', 3, 'n', 'e', 't', 0, 0, 10,
-      0, 11, 0, 0, 0, 12, 0, 3, 9, 9, 9
+      4, 'b', 'l', 'o', 'g', 4, 'j', 'i', 'l', 'l', 3, 'n', 'e', 't', 0,
+      0, 2, 0, 11, 0, 0, 0, 12,
+      0, 12, 6, 'r', 'o', 'o', 't', '-', '2', 3, 'n', 'e', 't', 0
     )
     assert(query.serialize.zipWithIndex == expected.zipWithIndex)
     assert(query == new Parser(expected.toArray).packet.get)
   }
 
   test("encoding.recursive") {
-    val q = Packet.recursive("www.example.com", Type.A)
+    //val q = Packet.recursive("www.example.com", Type.A)
+    val q = Packet(
+      Header(0, Flags.RecursionDesired, 1, 0, 0, 0),
+      List(Question(Name("www.example.com"), Type.A, Class.In)),
+      List(), List(), List())
     val r =
       q.copy(header = q.header.copy(id = Integer.parseInt("3c5f", 16).toShort))
     val expected =
