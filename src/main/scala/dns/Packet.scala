@@ -30,6 +30,7 @@ object Class {
 object Type {
   val A: Short = 1
   val NS: Short = 2
+  val CName: Short = 5
 }
 
 sealed abstract class Record(val typ: Short) {
@@ -43,6 +44,9 @@ case class ARecord(name: Name, cls: Short, ttl: Int, addr: String)
 
 case class NSRecord(name: Name, cls: Short, ttl: Int, server: String)
     extends Record(Type.NS)
+
+case class CNameRecord(name: Name, cls: Short, ttl: Int, redirect: String)
+    extends Record(Type.CName)
 
 case class OpaqueRecord(
     name: Name,

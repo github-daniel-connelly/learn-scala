@@ -72,15 +72,12 @@ object Encoding {
         serializeAddr(t.addr)
   }
 
-  implicit object OpaqueRecordSerializer extends Serializer[OpaqueRecord] {
-    def serialize(t: OpaqueRecord): ArraySeq[Byte] = ???
-  }
-
   implicit object RecordSerializer extends Serializer[Record] {
     def serialize(record: Record): ArraySeq[Byte] = record match {
       case a @ ARecord(_, _, _, _)              => a.serialize
       case ns @ NSRecord(_, _, _, _)            => ns.serialize
-      case opaque @ OpaqueRecord(_, _, _, _, _) => opaque.serialize
+      case cn @ CNameRecord(_, _, _, _)         => ???
+      case opaque @ OpaqueRecord(_, _, _, _, _) => ???
     }
   }
 
@@ -189,29 +186,21 @@ object Encoding {
       cls <- short
     } yield Question(name, typ, cls)
 
-    /*
-    def recordData(typ: Short, len: Short): Try[RecordData] = Try(typ match {
-      case Type.A => {
-      }
-      case Type.NS => NameServer(name.get.name)
-      case typ => {
-      }
-    })
-        len <- short
-        data <- recordData(typ, len)
-      } yield Record(name, typ, cls, ttl, data)
-    }
-     */
-
     def record(name: Name, typ: Short, cls: Short, ttl: Int): Try[Record] =
       short.flatMap(len =>
         typ match {
-          case Type.A =>
+          case Type.A => {
             advance(len)
             val addr = formatAddress(ArraySeq.from(b.slice(pos - len, pos)))
             Success(ARecord(name, cls, ttl, addr))
+          }
           case Type.NS => {
             this.name.map(server => NSRecord(name, cls, ttl, server.name))
+          }
+          case Type.CName => {
+            this.name.map(redirect =>
+              CNameRecord(name, cls, ttl, redirect.name)
+            )
           }
           case typ => {
             advance(len)

@@ -13,6 +13,8 @@ object Resolver {
 
 case class NoRecordFoundException(name: String)
     extends Exception(s"no record found for $name")
+case class UnexpectedAnswerTypeException(typ: Short)
+    extends Exception(s"unexpected answer record type: $typ")
 
 class Resolver(client: Client)(implicit ec: ExecutionContext) {
   private def findType[T <: Record](list: List[Record], typ: Short) =
@@ -25,10 +27,12 @@ class Resolver(client: Client)(implicit ec: ExecutionContext) {
     println(s"resolving $name via $nameserver")
     client
       .query(name, nameserver)
-      .flatMap(packet => {
-        if (!packet.answers.isEmpty)
-          // done
-          Future.successful(packet.answers.head.asInstanceOf[ARecord].addr)
+      .flatMap(packet =>
+        if (!packet.answers.isEmpty) packet.answers.head match {
+          case a: ARecord      => Future.successful(a.addr)
+          case cn: CNameRecord => resolve(cn.redirect)
+          case r => Future.failed(UnexpectedAnswerTypeException(r.typ))
+        }
         else if (!packet.additionals.isEmpty)
           // we know the next server to ask
           findType[ARecord](packet.additionals, Type.A)
@@ -43,6 +47,6 @@ class Resolver(client: Client)(implicit ec: ExecutionContext) {
               resolve(record.server).flatMap(ns => resolve(name, ns))
             )
             .getOrElse(Future.failed(NoRecordFoundException(name)))
-      })
+      )
   }
 }
