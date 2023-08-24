@@ -10,8 +10,8 @@ import scala.util.Failure
 
 object Main {
   def resolve(name: String, log: Boolean) = {
-    val client = new Client(logging = log)
-    client.resolve(name).onComplete {
+    val resolver = new Resolver(new Client(shouldLog = log))
+    resolver.resolve(name).onComplete {
       case Success(value) => println(value)
       case Failure(NoRecordFoundException(_)) =>
         println(s"no record found for: $name")

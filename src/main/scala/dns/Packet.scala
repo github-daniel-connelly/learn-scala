@@ -26,6 +26,7 @@ object Class {
   val In: Short = 1
 }
 
+// TODO: make this an enum
 object Type {
   val A: Short = 1
   val NS: Short = 2
@@ -35,12 +36,6 @@ sealed abstract class Record(val typ: Short) {
   def name: Name
   def cls: Short
   def ttl: Int
-
-  override def toString: String = this match {
-    case ARecord(_, _, _, addr)      => addr
-    case NSRecord(_, _, _, server)   => server
-    case OpaqueRecord(_, _, _, _, _) => "[opaque data]"
-  }
 }
 
 case class ARecord(name: Name, cls: Short, ttl: Int, addr: String)

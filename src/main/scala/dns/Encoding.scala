@@ -82,30 +82,7 @@ object Encoding {
       case ns @ NSRecord(_, _, _, _)            => ns.serialize
       case opaque @ OpaqueRecord(_, _, _, _, _) => opaque.serialize
     }
-    /*
-      record.name.serialize ++
-        record.typ.serialize ++
-        record.cls.serialize ++
-        record.ttl.serialize ++
-        record.data.serialize
-     */
   }
-
-  /*
-  implicit object RecordDataSerializer extends Serializer[RecordData] {
-    def serialize(t: RecordData): ArraySeq[Byte] = {
-      val data = t match {
-        case IpAddr(addr) =>
-          ArraySeq.from(
-            addr.split('.').map(_.toInt.toByte).flatMap(_.serialize)
-          )
-        case NameServer(name) => Name(name).serialize
-        case OpaqueData(data) => ArraySeq.from(data)
-      }
-      data.length.toShort.serialize ++ data
-    }
-  }
-   */
 
   private def formatAddress(data: ArraySeq[Byte]): String =
     data.map(_ & 0xff).map(b => f"$b%d").mkString(".")
